@@ -2,7 +2,7 @@
 // DATABASE CONFIGURATION (FOR TEACHERS)
 // ============================================================
 // Paste your Google Sheets Web App URL here to hardcode it for all students:
-const DEFAULT_DATABASE_URL = "https://script.google.com/macros/s/AKfycbz_H4kP1QfE-9posjGJZIgSUnSboAIrGkp2JlkQ5bPYqAgBhYlucP4hrEc-GyEetNgy/exec";
+const DEFAULT_DATABASE_URL = "https://script.google.com/macros/s/AKfycbyrnAZyI2A5jZRRteGK5CvZ7wVXh6DI-NW9rM9y7v2giaIg7k9aysy7C5mZREw8a_oL/exec";
 
 // Global App State
 const state = {
