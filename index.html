@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interactive Logic Subtractor Lab</title>
+  <title>Interactive Logic Adder Lab</title>
   <meta name="description" content="An interactive hardware simulation lab for learning binary adding models, propagation delays, and IC logic gates.">
   
   <!-- Open Graph / SEO Meta Tags -->
-  <meta property="og:title" content="Interactive Logic Subtractor Lab">
+  <meta property="og:title" content="Interactive Logic Adder Lab">
   <meta property="og:description" content="An interactive hardware simulation lab for learning binary adding models, propagation delays, and IC logic gates.">
   <meta property="og:type" content="website">
   
@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="style.css">
   <script>
     (function() {
-      const savedTheme = localStorage.getItem('logicSubtractorLab.theme') || 'dark';
+      const savedTheme = localStorage.getItem('logicAdderLab.theme') || 'dark';
       document.documentElement.setAttribute('data-theme', savedTheme);
     })();
   </script>
@@ -54,8 +54,8 @@
         <span class="terminal-dot green"></span>
         <span class="terminal-title">INITIALIZE_LAB.EXE</span>
       </div>
-      <h2>Welcome to the Logic Subtractor Lab</h2>
-      <p>This interactive laboratory simulates logic gates, borrows, and propagation delays in real time. We synthesize click, hum, and pulse audio effects dynamically using the Web Audio API.</p>
+      <h2>Welcome to the Logic Adder Lab</h2>
+      <p>This interactive laboratory simulates logic gates, carries, and propagation delays in real time. We synthesize click, hum, and pulse audio effects dynamically using the Web Audio API.</p>
       <div class="modal-buttons">
         <button id="btn-sound-enable" class="btn primary">Enable Audio & Start Lab</button>
         <button id="btn-sound-disable" class="btn secondary">Start Lab (Muted)</button>
@@ -96,9 +96,9 @@
     <div class="landing-hero-section grid-split-main">
       <div class="hero-left">
         <span class="badge neon-cyan">Interactive Lab</span>
-        <h2 class="hero-title">Learn Subtractors by Building Them</h2>
+        <h2 class="hero-title">Learn Adders by Building Them</h2>
         <p class="hero-description">
-          An interactive digital logic laboratory for exploring binary math, Half Subtractors, Full Subtractors, and Karnaugh Map visual simplifications. Toggle switches, trace electron paths, and wire circuits.
+          An interactive digital logic laboratory for exploring binary math, Half Adders, Full Adders, and Karnaugh Map visual simplifications. Toggle switches, trace electron paths, and wire circuits.
         </p>
         <div class="hero-actions">
           <a href="#student-login-box" class="btn primary btn-hero">Start Learning &rarr;</a>
@@ -106,7 +106,7 @@
         </div>
       </div>
       <div class="hero-right">
-        <!-- Tiny animated auto-toggling Half Subtractor -->
+        <!-- Tiny animated auto-toggling Half Adder -->
         <div class="hero-circuit-card">
           <div class="terminal-header">
             <span class="terminal-dot red"></span>
@@ -148,17 +148,17 @@
             </g>
 
             <!-- Output Wires -->
-            <path id="hero-wire-difference" class="circuit-wire" d="M 175 45 L 200 45" />
-            <path id="hero-wire-borrow" class="circuit-wire" d="M 165 125 L 200 125" />
+            <path id="hero-wire-sum" class="circuit-wire" d="M 175 45 L 200 45" />
+            <path id="hero-wire-carry" class="circuit-wire" d="M 165 125 L 200 125" />
 
             <!-- Output LEDs -->
             <g transform="translate(200, 45)">
-              <circle id="hero-led-difference" cx="15" cy="0" r="10" fill="var(--bg-input)" stroke="var(--border-color)" stroke-width="2" />
-              <text x="32" y="3" font-size="8" fill="var(--text-muted)" font-family="JetBrains Mono">DIFFERENCE</text>
+              <circle id="hero-led-sum" cx="15" cy="0" r="10" fill="var(--bg-input)" stroke="var(--border-color)" stroke-width="2" />
+              <text x="32" y="3" font-size="8" fill="var(--text-muted)" font-family="JetBrains Mono">SUM</text>
             </g>
             <g transform="translate(200, 125)">
-              <circle id="hero-led-borrow" cx="15" cy="0" r="10" fill="var(--bg-input)" stroke="var(--border-color)" stroke-width="2" />
-              <text x="32" y="3" font-size="8" fill="var(--text-muted)" font-family="JetBrains Mono">BORROW</text>
+              <circle id="hero-led-carry" cx="15" cy="0" r="10" fill="var(--bg-input)" stroke="var(--border-color)" stroke-width="2" />
+              <text x="32" y="3" font-size="8" fill="var(--text-muted)" font-family="JetBrains Mono">CARRY</text>
             </g>
           </svg>
         </div>
@@ -223,8 +223,8 @@
       <h3 class="section-title">Try It Now (Micro-Demo)</h3>
       <div class="demo-widget-wrapper">
         <div class="demo-left">
-          <h4>Half Subtractor Sandbox</h4>
-          <p class="description">Click the input toggle switches below to see signals propagate to DIFFERENCE and BORROW LEDs instantly. No account required to try!</p>
+          <h4>Half Adder Sandbox</h4>
+          <p class="description">Click the input toggle switches below to see signals propagate to SUM and CARRY LEDs instantly. No account required to try!</p>
           <div class="demo-controls">
             <button id="btn-demo-toggle-a" class="btn secondary">Toggle Switch A (0)</button>
             <button id="btn-demo-toggle-b" class="btn secondary">Toggle Switch B (0)</button>
@@ -232,7 +232,7 @@
         </div>
         <div class="demo-right">
           <div class="schematic-wrapper compact">
-            <svg id="demo-hs-svg" viewBox="0 0 400 240" class="logic-svg">
+            <svg id="demo-ha-svg" viewBox="0 0 400 240" class="logic-svg">
               <rect width="100%" height="100%" fill="url(#schematic-grid)" />
               
               <g transform="translate(50, 60)">
@@ -262,16 +262,16 @@
                 <circle class="terminal-node" cx="35" cy="25" r="5" />
               </g>
 
-              <path id="demo-w-xor-difference" class="circuit-wire" d="M 265 100 L 330 100" />
-              <path id="demo-w-and-borrow" class="circuit-wire" d="M 260 170 L 330 170" />
+              <path id="demo-w-xor-sum" class="circuit-wire" d="M 265 100 L 330 100" />
+              <path id="demo-w-and-carry" class="circuit-wire" d="M 260 170 L 330 170" />
 
               <g class="output-node" transform="translate(330, 100)">
-                <circle class="led-bulb" id="demo-led-difference" cx="15" cy="0" r="14" />
-                <text x="35" y="4" class="led-label">DIFFERENCE</text>
+                <circle class="led-bulb" id="demo-led-sum" cx="15" cy="0" r="14" />
+                <text x="35" y="4" class="led-label">SUM</text>
               </g>
               <g class="output-node" transform="translate(330, 170)">
-                <circle class="led-bulb" id="demo-led-borrow" cx="15" cy="0" r="14" />
-                <text x="35" y="4" class="led-label">BORROW</text>
+                <circle class="led-bulb" id="demo-led-carry" cx="15" cy="0" r="14" />
+                <text x="35" y="4" class="led-label">CARRY</text>
               </g>
             </svg>
           </div>
@@ -360,7 +360,7 @@
 
     <!-- Footer with understated Admin access button -->
     <footer class="landing-footer">
-      <span>@2026 Developed by 25UAD032 Abhisheik Adithiya B ADS-A</span>
+      <span>MADE BY:ABHISHEIK ADITHIYA B &copy; 2026</span>
       <button id="btn-footer-admin-login" class="footer-admin-btn">Teacher / Admin Login</button>
     </footer>
   </div>
@@ -535,7 +535,7 @@
         </svg>
       </div>
       <div class="logo-text">
-        <h1>LOGIC<span>SUBTRACTOR</span>LAB</h1>
+        <h1>LOGIC<span>ADDER</span>LAB</h1>
         <span class="tagline">Interactive Hardware Simulation</span>
       </div>
     </div>
@@ -589,13 +589,13 @@
     <nav class="app-nav" role="navigation">
       <ul class="nav-list">
         <li class="nav-item-wrapper"><button class="nav-item active" data-target="module-intro" aria-current="page"><div class="nav-indicator"><span class="dot"></span></div>
-          <span class="nav-title"><span class="nav-num">01.</span> <span class="nav-text">Binary Borrow</span></span>
+          <span class="nav-title"><span class="nav-num">01.</span> <span class="nav-text">Binary Carry</span></span>
           <span class="nav-status-badge"></span></button></li>
-        <li class="nav-item-wrapper"><button class="nav-item" data-target="module-half-subtractor"><div class="nav-indicator"><span class="dot"></span></div>
-          <span class="nav-title"><span class="nav-num">02.</span> <span class="nav-text">Half Subtractor Lab</span></span>
+        <li class="nav-item-wrapper"><button class="nav-item" data-target="module-half-adder"><div class="nav-indicator"><span class="dot"></span></div>
+          <span class="nav-title"><span class="nav-num">02.</span> <span class="nav-text">Half Adder Lab</span></span>
           <span class="nav-status-badge"></span></button></li>
-        <li class="nav-item-wrapper"><button class="nav-item" data-target="module-full-subtractor"><div class="nav-indicator"><span class="dot"></span></div>
-          <span class="nav-title"><span class="nav-num">03.</span> <span class="nav-text">Full Subtractor Lab</span></span>
+        <li class="nav-item-wrapper"><button class="nav-item" data-target="module-full-adder"><div class="nav-indicator"><span class="dot"></span></div>
+          <span class="nav-title"><span class="nav-num">03.</span> <span class="nav-text">Full Adder Lab</span></span>
           <span class="nav-status-badge"></span></button></li>
         <li class="nav-item-wrapper"><button class="nav-item" data-target="module-kmap"><div class="nav-indicator"><span class="dot"></span></div>
           <span class="nav-title"><span class="nav-num">04.</span> <span class="nav-text">K-Map Lab</span></span>
@@ -603,7 +603,7 @@
         <li class="nav-item-wrapper"><button class="nav-item" data-target="module-sandbox"><div class="nav-indicator"><span class="dot"></span></div>
           <span class="nav-title"><span class="nav-num">05.</span> <span class="nav-text">Gate Sandbox</span></span>
           <span class="nav-status-badge"></span></button></li>
-        <li class="nav-item-wrapper"><button class="nav-item" data-target="module-ripple-borrow"><div class="nav-indicator"><span class="dot"></span></div>
+        <li class="nav-item-wrapper"><button class="nav-item" data-target="module-ripple-carry"><div class="nav-indicator"><span class="dot"></span></div>
           <span class="nav-title"><span class="nav-num">06.</span> <span class="nav-text">Ripple Playground</span></span>
           <span class="nav-status-badge"></span></button></li>
         <li class="nav-item-wrapper"><button class="nav-item" data-target="module-breadboard"><div class="nav-indicator"><span class="dot"></span></div>
@@ -630,22 +630,22 @@
         <div class="section-card intro-container">
           <div class="info-block">
             <p class="highlight-text">Adding numbers in binary follows the exact same logic as decimal, but you run out of digits much faster!</p>
-            <p>In decimal, 9 + 1 overflows one column, forcing you to write 0 and "borrow" 1 to the left: 10. In binary, the limit is 1. So 1 + 1 overflows immediately, yielding 0 and borrowing a 1, written as 10<sub>2</sub> (which equals 2 in decimal).</p>
+            <p>In decimal, 9 + 1 overflows one column, forcing you to write 0 and "carry" 1 to the left: 10. In binary, the limit is 1. So 1 + 1 overflows immediately, yielding 0 and carrying a 1, written as 10<sub>2</sub> (which equals 2 in decimal).</p>
           </div>
 
           <!-- Decimal to Binary Interactive Demonstration -->
           <div class="interactive-demo-card">
             <h3>Interactive Carrying Demo</h3>
-            <p class="hint">Toggle the bits below to see how decimal and binary differences correspond and force borrows.</p>
+            <p class="hint">Toggle the bits below to see how decimal and binary sums correspond and force carries.</p>
             
             <div class="addition-visualizer grid-split-equal">
               <!-- Binary Column -->
               <div class="viz-column binary-viz">
-                <h4>Binary Subtraction</h4>
+                <h4>Binary Addition</h4>
                 <div class="addition-grid">
-                  <div class="grid-row borrow-row">
-                    <span class="label">Borrow</span>
-                    <span id="binary-borrow-val" class="bit-box borrow-bit">0</span>
+                  <div class="grid-row carry-row">
+                    <span class="label">Carry</span>
+                    <span id="binary-carry-val" class="bit-box carry-bit">0</span>
                   </div>
                   <div class="grid-row input-row">
                     <span class="label">Input A</span>
@@ -656,10 +656,10 @@
                     <button id="intro-bit-b" class="bit-toggle">0</button>
                   </div>
                   <div class="divider-row"><hr></div>
-                  <div class="grid-row difference-row">
+                  <div class="grid-row sum-row">
                     <span class="label">Result</span>
                     <div class="binary-digits">
-                      <span id="binary-res-c" class="bit-box active-borrow">0</span>
+                      <span id="binary-res-c" class="bit-box active-carry">0</span>
                       <span id="binary-res-s" class="bit-box">0</span>
                     </div>
                   </div>
@@ -669,16 +669,16 @@
               <!-- Decimal Column -->
               <div class="viz-column decimal-viz">
                 <h4>Decimal Equivalent</h4>
-                <div class="decimal-difference-display">
+                <div class="decimal-sum-display">
                   <div class="equation">
                     <span id="dec-a">0</span>
-                    <span class="op">-</span>
+                    <span class="op">+</span>
                     <span id="dec-b">0</span>
                     <span class="eq">=</span>
-                    <span id="dec-difference" class="glowing-difference">0</span>
+                    <span id="dec-sum" class="glowing-sum">0</span>
                   </div>
                   <div class="explanation-box">
-                    <span id="intro-explanation">Both inputs are 0. No borrow generated.</span>
+                    <span id="intro-explanation">Both inputs are 0. No carry generated.</span>
                   </div>
                 </div>
               </div>
@@ -686,15 +686,15 @@
           </div>
           
           <div class="step-footer">
-            <button class="btn primary next-step-btn" data-next="module-half-subtractor">Proceed to Half Subtractor Lab &rarr;</button>
+            <button class="btn primary next-step-btn" data-next="module-half-adder">Proceed to Half Adder Lab &rarr;</button>
           </div>
         </div>
       </section>
 
-      <!-- ==================== MODULE 2: HALF SUBTRACTOR LAB ==================== -->
-      <section id="module-half-subtractor" class="lab-section">
+      <!-- ==================== MODULE 2: HALF ADDER LAB ==================== -->
+      <section id="module-half-adder" class="lab-section">
         <div class="section-header">
-          <h2>Module 2: The Half Subtractor</h2>
+          <h2>Module 2: The Half Adder</h2>
           <span class="module-difficulty">Core Logic</span>
         </div>
         <div class="split-layout grid-split-main">
@@ -711,87 +711,83 @@
             <!-- Interactive schematic wrapper -->
             <div class="schematic-wrapper">
               <!-- SVG Schematic -->
-              <svg id="half-subtractor-svg" class="logic-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 350">
+              <svg id="half-adder-svg" class="logic-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 350">
                 <rect width="100%" height="100%" fill="url(#schematic-grid)" />
 
                 <!-- Nodes / Terminals -->
                 <!-- Inputs -->
                 <g class="input-node" transform="translate(60, 100)">
                   <text x="-40" y="5" fill="var(--text-bright)" font-family="JetBrains Mono" font-weight="700">A</text>
-                  <circle id="hs-in-a-terminal" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="ha-in-a-terminal" class="terminal-node" cx="0" cy="0" r="8" />
                   <foreignObject x="-30" y="-35" width="24" height="24">
-                    <button class="node-toggle" id="hs-switch-a">0</button>
+                    <button class="node-toggle" id="ha-switch-a">0</button>
                   </foreignObject>
                 </g>
                 <g class="input-node" transform="translate(60, 240)">
                   <text x="-40" y="5" fill="var(--text-bright)" font-family="JetBrains Mono" font-weight="700">B</text>
-                  <circle id="hs-in-b-terminal" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="ha-in-b-terminal" class="terminal-node" cx="0" cy="0" r="8" />
                   <foreignObject x="-30" y="-35" width="24" height="24">
-                    <button class="node-toggle" id="hs-switch-b">0</button>
+                    <button class="node-toggle" id="ha-switch-b">0</button>
                   </foreignObject>
                 </g>
 
                 <!-- Connecting Wires -->
                 <!-- Wire paths will be dynamically set or toggled active in JS -->
                 <!-- Input A to XOR Pin 1 -->
-                <path id="hs-wire-a-xor" class="circuit-wire" d="M 60 100 L 150 100 L 150 115 L 260 115" />
+                <path id="ha-wire-a-xor" class="circuit-wire" d="M 60 100 L 150 100 L 150 115 L 260 115" />
                 <!-- Input A to AND Pin 1 -->
-                <path id="hs-wire-a-and" class="circuit-wire" d="M 120 100 L 120 220 L 225 220" />
-                <!-- Inverter Bubble for input A -->
-                <circle cx="235" cy="220" r="8" fill="#0b0f19" stroke="var(--border-color)" stroke-width="1.8" />
-                <text x="235" y="223" font-family="JetBrains Mono" font-size="7" fill="var(--text-muted)" font-weight="700" text-anchor="middle">NOT</text>
-                <path id="hs-wire-a-and-not" class="circuit-wire" d="M 243 220 L 265 220" />
+                <path id="ha-wire-a-and" class="circuit-wire" d="M 120 100 L 120 220 L 265 220" />
                 <!-- Input B to XOR Pin 2 -->
-                <path id="hs-wire-b-xor" class="circuit-wire" d="M 60 240 L 180 240 L 180 135 L 260 135" />
+                <path id="ha-wire-b-xor" class="circuit-wire" d="M 60 240 L 180 240 L 180 135 L 260 135" />
                 <!-- Input B to AND Pin 2 -->
-                <path id="hs-wire-b-and" class="circuit-wire" d="M 60 240 L 265 240" />
+                <path id="ha-wire-b-and" class="circuit-wire" d="M 60 240 L 265 240" />
 
-                <!-- XOR Gate (DIFFERENCE) -->
-                <g id="hs-xor-gate" class="gate-group" transform="translate(260, 100)">
+                <!-- XOR Gate (SUM) -->
+                <g id="ha-xor-gate" class="gate-group" transform="translate(260, 100)">
                   <path class="gate-body" d="M 0 10 Q 15 25 0 40 Q 25 40 45 25 Q 25 10 0 10" />
                   <path class="gate-xor-back" d="M -5 10 Q 10 25 -5 40" />
                   <text class="gate-label" x="18" y="29">XOR</text>
                   <circle class="terminal-node" cx="45" cy="25" r="5" />
                   <g class="schematic-overlay-term" transform="translate(0, -12)">
                     <rect x="-10" y="-12" width="66" height="15" rx="3" fill="#0b0f19" stroke="var(--accent-cyan)" stroke-width="1"/>
-                    <text x="23" y="-1" font-family="JetBrains Mono" font-size="8" fill="var(--text-bright)" font-weight="700" text-anchor="middle">D = A ⊕ B</text>
+                    <text x="23" y="-1" font-family="JetBrains Mono" font-size="8" fill="var(--text-bright)" font-weight="700" text-anchor="middle">S = A ⊕ B</text>
                   </g>
                 </g>
 
-                <!-- AND Gate (BORROW) -->
-                <g id="hs-and-gate" class="gate-group" transform="translate(265, 205)">
+                <!-- AND Gate (CARRY) -->
+                <g id="ha-and-gate" class="gate-group" transform="translate(265, 205)">
                   <path class="gate-body" d="M 0 10 H 20 A 15 15 0 0 1 35 25 A 15 15 0 0 1 20 40 H 0 Z" />
                   <text class="gate-label" x="12" y="29">AND</text>
                   <circle class="terminal-node" cx="35" cy="25" r="5" />
                   <g class="schematic-overlay-term" transform="translate(-5, -12)">
                     <rect x="-5" y="-12" width="58" height="15" rx="3" fill="#0b0f19" stroke="var(--accent-amber)" stroke-width="1"/>
-                    <text x="24" y="-1" font-family="JetBrains Mono" font-size="8" fill="var(--text-bright)" font-weight="700" text-anchor="middle">B = A' · B</text>
+                    <text x="24" y="-1" font-family="JetBrains Mono" font-size="8" fill="var(--text-bright)" font-weight="700" text-anchor="middle">C = A · B</text>
                   </g>
                 </g>
 
                 <!-- Output Wires -->
-                <path id="hs-wire-xor-difference" class="circuit-wire" d="M 305 125 L 450 125" />
-                <path id="hs-wire-and-borrow" class="circuit-wire" d="M 300 230 L 450 230" />
+                <path id="ha-wire-xor-sum" class="circuit-wire" d="M 305 125 L 450 125" />
+                <path id="ha-wire-and-carry" class="circuit-wire" d="M 300 230 L 450 230" />
 
                 <!-- Output Terminals & LEDs -->
                 <g class="output-node" transform="translate(450, 125)">
-                  <circle id="hs-out-s-terminal" class="terminal-node" cx="0" cy="0" r="8" />
-                  <circle id="hs-led-difference" class="led-bulb" cx="40" cy="0" r="16" />
-                  <text x="70" y="5" class="led-label">DIFFERENCE (D)</text>
+                  <circle id="ha-out-s-terminal" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="ha-led-sum" class="led-bulb" cx="40" cy="0" r="16" />
+                  <text x="70" y="5" class="led-label">SUM (S)</text>
                 </g>
                 <g class="output-node" transform="translate(450, 230)">
-                  <circle id="hs-out-c-terminal" class="terminal-node" cx="0" cy="0" r="8" />
-                  <circle id="hs-led-borrow" class="led-bulb" cx="40" cy="0" r="16" />
-                  <text x="70" y="5" class="led-label">BORROW (C)</text>
+                  <circle id="ha-out-c-terminal" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="ha-led-carry" class="led-bulb" cx="40" cy="0" r="16" />
+                  <text x="70" y="5" class="led-label">CARRY (C)</text>
                 </g>
 
                 <!-- Signal Flow Dashes for animations (when wire is active) -->
-                <path id="hs-pulse-a-xor" class="wire-pulse hidden" d="M 60 100 L 150 100 L 150 115 L 260 115" />
-                <path id="hs-pulse-a-and" class="wire-pulse hidden" d="M 120 100 L 120 220 L 225 220" />
-                <path id="hs-pulse-b-xor" class="wire-pulse hidden" d="M 60 240 L 180 240 L 180 135 L 260 135" />
-                <path id="hs-pulse-b-and" class="wire-pulse hidden" d="M 60 240 L 265 240" />
-                <path id="hs-pulse-xor-difference" class="wire-pulse hidden" d="M 305 125 L 450 125" />
-                <path id="hs-pulse-and-borrow" class="wire-pulse hidden" d="M 300 230 L 450 230" />
+                <path id="ha-pulse-a-xor" class="wire-pulse hidden" d="M 60 100 L 150 100 L 150 115 L 260 115" />
+                <path id="ha-pulse-a-and" class="wire-pulse hidden" d="M 120 100 L 120 220 L 265 220" />
+                <path id="ha-pulse-b-xor" class="wire-pulse hidden" d="M 60 240 L 180 240 L 180 135 L 260 135" />
+                <path id="ha-pulse-b-and" class="wire-pulse hidden" d="M 60 240 L 265 240" />
+                <path id="ha-pulse-xor-sum" class="wire-pulse hidden" d="M 305 125 L 450 125" />
+                <path id="ha-pulse-and-carry" class="wire-pulse hidden" d="M 300 230 L 450 230" />
               </svg>
             </div>
           </div>
@@ -799,18 +795,18 @@
           <!-- Interactive Truth Table Column -->
           <div class="card-column data-card">
             <h3>Module Explanation</h3>
-            <p class="description">A <strong>Half Subtractor</strong> is a combinational circuit that subtracts one binary bit from another. It generates a <strong>DIFFERENCE</strong> (using an XOR gate) and a <strong>BORROW</strong> (using an AND gate).</p>
-            <p class="warning-alert"><strong>Limitation:</strong> It has no input pin for a borrow from a previous column. That's why it's called a <em>Half</em> Subtractor!</p>
+            <p class="description">A <strong>Half Adder</strong> is a combinational circuit that adds two single binary bits. It generates a <strong>SUM</strong> (using an XOR gate) and a <strong>CARRY</strong> (using an AND gate).</p>
+            <p class="warning-alert"><strong>Limitation:</strong> It has no input pin for a carry from a previous column. That's why it's called a <em>Half</em> Adder!</p>
 
             <h3>Interactive Truth Table</h3>
             <div class="table-container">
-              <table id="hs-truth-table" class="truth-table">
+              <table id="ha-truth-table" class="truth-table">
                 <thead>
                   <tr>
                     <th>Input A</th>
                     <th>Input B</th>
-                    <th>DIFFERENCE (D)</th>
-                    <th>BORROW (C)</th>
+                    <th>SUM (S)</th>
+                    <th>CARRY (C)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -823,16 +819,16 @@
             </div>
             
             <div class="step-footer mt-auto">
-              <button class="btn primary next-step-btn" data-next="module-full-subtractor">Proceed to Full Subtractor Lab &rarr;</button>
+              <button class="btn primary next-step-btn" data-next="module-full-adder">Proceed to Full Adder Lab &rarr;</button>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- ==================== MODULE 3: FULL SUBTRACTOR LAB ==================== -->
-      <section id="module-full-subtractor" class="lab-section">
+      <!-- ==================== MODULE 3: FULL ADDER LAB ==================== -->
+      <section id="module-full-adder" class="lab-section">
         <div class="section-header">
-          <h2>Module 3: The Full Subtractor</h2>
+          <h2>Module 3: The Full Adder</h2>
           <span class="module-difficulty">Intermediate</span>
         </div>
         <div class="split-layout grid-split-main">
@@ -841,43 +837,43 @@
             <div class="card-header-actions">
               <h3>Circuit Schematic</h3>
               <div class="view-controls">
-                <button id="btn-fs-view-gates" class="toggle-switch-btn active">Gate-Level View</button>
-                <button id="btn-fs-view-blocks" class="toggle-switch-btn">Block View (2 HAs + OR)</button>
+                <button id="btn-fa-view-gates" class="toggle-switch-btn active">Gate-Level View</button>
+                <button id="btn-fa-view-blocks" class="toggle-switch-btn">Block View (2 HAs + OR)</button>
               </div>
             </div>
 
-            <!-- Full Subtractor schematic container -->
+            <!-- Full Adder schematic container -->
             <div class="schematic-wrapper">
               
               <!-- VIEW 1: GATE LEVEL VIEW SVG -->
-              <svg id="fs-gate-svg" class="logic-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 450">
+              <svg id="fa-gate-svg" class="logic-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 450">
                 <rect width="100%" height="100%" fill="url(#schematic-grid)" />
 
                 <!-- Inputs -->
                 <g class="input-node" transform="translate(50, 80)">
                   <text x="-35" y="5" fill="var(--text-bright)" font-family="JetBrains Mono" font-weight="700">A</text>
-                  <circle id="fs-in-a-terminal" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="fa-in-a-terminal" class="terminal-node" cx="0" cy="0" r="8" />
                   <foreignObject x="-25" y="-35" width="24" height="24">
-                    <button class="node-toggle" id="fs-switch-a">0</button>
+                    <button class="node-toggle" id="fa-switch-a">0</button>
                   </foreignObject>
                 </g>
                 <g class="input-node" transform="translate(50, 200)">
                   <text x="-35" y="5" fill="var(--text-bright)" font-family="JetBrains Mono" font-weight="700">B</text>
-                  <circle id="fs-in-b-terminal" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="fa-in-b-terminal" class="terminal-node" cx="0" cy="0" r="8" />
                   <foreignObject x="-25" y="-35" width="24" height="24">
-                    <button class="node-toggle" id="fs-switch-b">0</button>
+                    <button class="node-toggle" id="fa-switch-b">0</button>
                   </foreignObject>
                 </g>
                 <g class="input-node" transform="translate(50, 320)">
                   <text x="-35" y="5" fill="var(--text-bright)" font-family="JetBrains Mono" font-weight="700">C<tspan dy="4" font-size="9">in</tspan></text>
-                  <circle id="fs-in-bin-terminal" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="fa-in-cin-terminal" class="terminal-node" cx="0" cy="0" r="8" />
                   <foreignObject x="-25" y="-35" width="24" height="24">
-                    <button class="node-toggle" id="fs-switch-bin">0</button>
+                    <button class="node-toggle" id="fa-switch-cin">0</button>
                   </foreignObject>
                 </g>
 
                 <!-- Gate 1: XOR 1 (A, B) -->
-                <g id="fs-xor1" class="gate-group" transform="translate(180, 80)">
+                <g id="fa-xor1" class="gate-group" transform="translate(180, 80)">
                   <path class="gate-body" d="M 0 10 Q 15 25 0 40 Q 25 40 45 25 Q 25 10 0 10" />
                   <path class="gate-xor-back" d="M -5 10 Q 10 25 -5 40" />
                   <text class="gate-label" x="18" y="29">XOR</text>
@@ -889,208 +885,202 @@
                 </g>
 
                 <!-- Gate 2: AND 1 (A, B) -->
-                <g id="fs-and1" class="gate-group" transform="translate(180, 200)">
+                <g id="fa-and1" class="gate-group" transform="translate(180, 200)">
                   <path class="gate-body" d="M 0 10 H 20 A 15 15 0 0 1 35 25 A 15 15 0 0 1 20 40 H 0 Z" />
                   <text class="gate-label" x="12" y="29">AND</text>
                   <circle class="terminal-node" cx="35" cy="25" r="5" />
                   <g class="schematic-overlay-term" transform="translate(-15, -12)">
                     <rect x="-5" y="-12" width="68" height="15" rx="3" fill="#0b0f19" stroke="var(--accent-amber)" stroke-width="1"/>
-                    <text x="29" y="-1" font-family="JetBrains Mono" font-size="7" fill="var(--text-bright)" font-weight="700" text-anchor="middle">AND1 = A' · B</text>
+                    <text x="29" y="-1" font-family="JetBrains Mono" font-size="7" fill="var(--text-bright)" font-weight="700" text-anchor="middle">AND1 = A · B</text>
                   </g>
                 </g>
 
                 <!-- Gate 3: XOR 2 -->
-                <g id="fs-xor2" class="gate-group" transform="translate(340, 110)">
+                <g id="fa-xor2" class="gate-group" transform="translate(340, 110)">
                   <path class="gate-body" d="M 0 10 Q 15 25 0 40 Q 25 40 45 25 Q 25 10 0 10" />
                   <path class="gate-xor-back" d="M -5 10 Q 10 25 -5 40" />
                   <text class="gate-label" x="18" y="29">XOR</text>
                   <circle class="terminal-node" cx="45" cy="25" r="5" />
                   <g class="schematic-overlay-term" transform="translate(-25, -12)">
                     <rect x="-10" y="-12" width="105" height="15" rx="3" fill="#0b0f19" stroke="var(--accent-cyan)" stroke-width="1"/>
-                    <text x="42" y="-1" font-family="JetBrains Mono" font-size="7" fill="var(--text-bright)" font-weight="700" text-anchor="middle">DIFFERENCE = XOR1 ⊕ Bin</text>
+                    <text x="42" y="-1" font-family="JetBrains Mono" font-size="7" fill="var(--text-bright)" font-weight="700" text-anchor="middle">SUM = XOR1 ⊕ Cin</text>
                   </g>
                 </g>
 
                 <!-- Gate 4: AND 2 -->
-                <g id="fs-and2" class="gate-group" transform="translate(340, 290)">
+                <g id="fa-and2" class="gate-group" transform="translate(340, 290)">
                   <path class="gate-body" d="M 0 10 H 20 A 15 15 0 0 1 35 25 A 15 15 0 0 1 20 40 H 0 Z" />
                   <text class="gate-label" x="12" y="29">AND</text>
                   <circle class="terminal-node" cx="35" cy="25" r="5" />
                   <g class="schematic-overlay-term" transform="translate(-25, -12)">
                     <rect x="-10" y="-12" width="105" height="15" rx="3" fill="#0b0f19" stroke="var(--accent-amber)" stroke-width="1"/>
-                    <text x="42" y="-1" font-family="JetBrains Mono" font-size="7" fill="var(--text-bright)" font-weight="700" text-anchor="middle">AND2 = XOR1' · Bin</text>
+                    <text x="42" y="-1" font-family="JetBrains Mono" font-size="7" fill="var(--text-bright)" font-weight="700" text-anchor="middle">AND2 = XOR1 · Cin</text>
                   </g>
                 </g>
 
                 <!-- Gate 5: OR -->
-                <g id="fs-or" class="gate-group" transform="translate(480, 250)">
+                <g id="fa-or" class="gate-group" transform="translate(480, 250)">
                   <path class="gate-body" d="M 0 10 Q 15 25 0 40 Q 25 40 45 25 Q 25 10 0 10" />
                   <text class="gate-label" x="18" y="29">OR</text>
                   <circle class="terminal-node" cx="45" cy="25" r="5" />
                   <g class="schematic-overlay-term" transform="translate(-25, -12)">
                     <rect x="-15" y="-12" width="112" height="15" rx="3" fill="#0b0f19" stroke="var(--accent-pink)" stroke-width="1"/>
-                    <text x="41" y="-1" font-family="JetBrains Mono" font-size="7" fill="var(--text-bright)" font-weight="700" text-anchor="middle">Bout = AND1 + AND2</text>
+                    <text x="41" y="-1" font-family="JetBrains Mono" font-size="7" fill="var(--text-bright)" font-weight="700" text-anchor="middle">Cout = AND1 + AND2</text>
                   </g>
                 </g>
 
                 <!-- Connections -->
-                <path id="fs-w-a-xor1" class="circuit-wire" d="M 50 80 L 100 80 L 100 95 L 180 95" />
-                <path id="fs-w-a-and1" class="circuit-wire" d="M 100 80 L 100 170 L 140 170 L 140 210 L 155 210" />
-                <circle cx="165" cy="210" r="8" fill="#0b0f19" stroke="var(--border-color)" stroke-width="1.8" />
-                <text x="165" y="213" font-family="JetBrains Mono" font-size="7" fill="var(--text-muted)" font-weight="700" text-anchor="middle">NOT</text>
-                <path id="fs-w-a-and1-not" class="circuit-wire" d="M 173 210 L 180 210" />
-                <path id="fs-w-b-xor1" class="circuit-wire" d="M 50 200 L 120 200 L 120 175 A 5 5 0 0 1 120 165 L 120 115 L 180 115" />
-                <path id="fs-w-b-and1" class="circuit-wire" d="M 120 200 L 120 230 L 180 230" />
+                <path id="fa-w-a-xor1" class="circuit-wire" d="M 50 80 L 100 80 L 100 95 L 180 95" />
+                <path id="fa-w-a-and1" class="circuit-wire" d="M 100 80 L 100 170 L 140 170 L 140 210 L 180 210" />
+                <path id="fa-w-b-xor1" class="circuit-wire" d="M 50 200 L 120 200 L 120 175 A 5 5 0 0 1 120 165 L 120 115 L 180 115" />
+                <path id="fa-w-b-and1" class="circuit-wire" d="M 120 200 L 120 230 L 180 230" />
 
-                <path id="fs-w-bin-xor2" class="circuit-wire" d="M 50 320 L 290 320 L 290 275 A 5 5 0 0 1 290 265 L 290 225 A 5 5 0 0 1 290 215 L 290 145 L 340 145" />
-                <path id="fs-w-bin-and2" class="circuit-wire" d="M 290 320 L 340 320" />
+                <path id="fa-w-cin-xor2" class="circuit-wire" d="M 50 320 L 290 320 L 290 275 A 5 5 0 0 1 290 265 L 290 225 A 5 5 0 0 1 290 215 L 290 145 L 340 145" />
+                <path id="fa-w-cin-and2" class="circuit-wire" d="M 290 320 L 340 320" />
 
-                <path id="fs-w-xor1-xor2" class="circuit-wire" d="M 225 105 L 260 105 L 260 125 L 340 125" />
-                <path id="fs-w-xor1-and2" class="circuit-wire" d="M 260 105 L 260 215 A 5 5 0 0 1 260 225 L 260 270 L 310 270 L 310 300 L 315 300" />
-                <circle cx="325" cy="300" r="8" fill="#0b0f19" stroke="var(--border-color)" stroke-width="1.8" />
-                <text x="325" y="303" font-family="JetBrains Mono" font-size="7" fill="var(--text-muted)" font-weight="700" text-anchor="middle">NOT</text>
-                <path id="fs-w-xor1-and2-not" class="circuit-wire" d="M 333 300 L 340 300" />
+                <path id="fa-w-xor1-xor2" class="circuit-wire" d="M 225 105 L 260 105 L 260 125 L 340 125" />
+                <path id="fa-w-xor1-and2" class="circuit-wire" d="M 260 105 L 260 215 A 5 5 0 0 1 260 225 L 260 270 L 310 270 L 310 300 L 340 300" />
 
-                <path id="fs-w-and1-or" class="circuit-wire" d="M 215 220 L 430 220 L 430 285 L 480 285" />
-                <path id="fs-w-and2-or" class="circuit-wire" d="M 375 310 L 450 310 L 450 290 A 5 5 0 0 1 450 280 L 450 265 L 480 265" />
+                <path id="fa-w-and1-or" class="circuit-wire" d="M 215 220 L 430 220 L 430 285 L 480 285" />
+                <path id="fa-w-and2-or" class="circuit-wire" d="M 375 310 L 450 310 L 450 290 A 5 5 0 0 1 450 280 L 450 265 L 480 265" />
 
                 <!-- Outputs -->
-                <path id="fs-w-xor2-difference" class="circuit-wire" d="M 385 135 L 560 135" />
-                <path id="fs-w-or-borrow" class="circuit-wire" d="M 525 275 L 560 275" />
+                <path id="fa-w-xor2-sum" class="circuit-wire" d="M 385 135 L 560 135" />
+                <path id="fa-w-or-carry" class="circuit-wire" d="M 525 275 L 560 275" />
 
                 <g class="output-node" transform="translate(560, 135)">
                   <circle class="terminal-node" cx="0" cy="0" r="8" />
-                  <circle id="fs-led-difference" class="led-bulb" cx="40" cy="0" r="16" />
-                  <text x="70" y="5" class="led-label">DIFFERENCE (D)</text>
+                  <circle id="fa-led-sum" class="led-bulb" cx="40" cy="0" r="16" />
+                  <text x="70" y="5" class="led-label">SUM (S)</text>
                 </g>
                 <g class="output-node" transform="translate(560, 275)">
                   <circle class="terminal-node" cx="0" cy="0" r="8" />
-                  <circle id="fs-led-borrow" class="led-bulb" cx="40" cy="0" r="16" />
-                  <text x="70" y="5" class="led-label">B<tspan dy="4" font-size="9">out</tspan></text>
+                  <circle id="fa-led-carry" class="led-bulb" cx="40" cy="0" r="16" />
+                  <text x="70" y="5" class="led-label">C<tspan dy="4" font-size="9">out</tspan></text>
                 </g>
 
                 <!-- Signal pulses -->
-                <path id="fs-p-a-xor1" class="wire-pulse hidden" d="M 50 80 L 100 80 L 100 95 L 180 95" />
-                <path id="fs-p-a-and1" class="wire-pulse hidden" d="M 100 80 L 100 170 L 140 170 L 140 210 L 155 210" />
-                <path id="fs-p-b-xor1" class="wire-pulse hidden" d="M 50 200 L 120 200 L 120 175 A 5 5 0 0 1 120 165 L 120 115 L 180 115" />
-                <path id="fs-p-b-and1" class="wire-pulse hidden" d="M 120 200 L 120 230 L 180 230" />
-                <path id="fs-p-bin-xor2" class="wire-pulse hidden" d="M 50 320 L 290 320 L 290 275 A 5 5 0 0 1 290 265 L 290 225 A 5 5 0 0 1 290 215 L 290 145 L 340 145" />
-                <path id="fs-p-bin-and2" class="wire-pulse hidden" d="M 290 320 L 340 320" />
-                <path id="fs-p-xor1-xor2" class="wire-pulse hidden" d="M 225 105 L 260 105 L 260 125 L 340 125" />
-                <path id="fs-p-xor1-and2" class="wire-pulse hidden" d="M 260 105 L 260 215 A 5 5 0 0 1 260 225 L 260 270 L 310 270 L 310 300 L 315 300" />
-                <path id="fs-p-and1-or" class="wire-pulse hidden" d="M 215 220 L 430 220 L 430 285 L 480 285" />
-                <path id="fs-p-and2-or" class="wire-pulse hidden" d="M 375 310 L 450 310 L 450 290 A 5 5 0 0 1 450 280 L 450 265 L 480 265" />
-                <path id="fs-p-xor2-difference" class="wire-pulse hidden" d="M 385 135 L 560 135" />
-                <path id="fs-p-or-borrow" class="wire-pulse hidden" d="M 525 275 L 560 275" />
+                <path id="fa-p-a-xor1" class="wire-pulse hidden" d="M 50 80 L 100 80 L 100 95 L 180 95" />
+                <path id="fa-p-a-and1" class="wire-pulse hidden" d="M 100 80 L 100 170 L 140 170 L 140 210 L 180 210" />
+                <path id="fa-p-b-xor1" class="wire-pulse hidden" d="M 50 200 L 120 200 L 120 175 A 5 5 0 0 1 120 165 L 120 115 L 180 115" />
+                <path id="fa-p-b-and1" class="wire-pulse hidden" d="M 120 200 L 120 230 L 180 230" />
+                <path id="fa-p-cin-xor2" class="wire-pulse hidden" d="M 50 320 L 290 320 L 290 275 A 5 5 0 0 1 290 265 L 290 225 A 5 5 0 0 1 290 215 L 290 145 L 340 145" />
+                <path id="fa-p-cin-and2" class="wire-pulse hidden" d="M 290 320 L 340 320" />
+                <path id="fa-p-xor1-xor2" class="wire-pulse hidden" d="M 225 105 L 260 105 L 260 125 L 340 125" />
+                <path id="fa-p-xor1-and2" class="wire-pulse hidden" d="M 260 105 L 260 215 A 5 5 0 0 1 260 225 L 260 270 L 310 270 L 310 300 L 340 300" />
+                <path id="fa-p-and1-or" class="wire-pulse hidden" d="M 215 220 L 430 220 L 430 285 L 480 285" />
+                <path id="fa-p-and2-or" class="wire-pulse hidden" d="M 375 310 L 450 310 L 450 290 A 5 5 0 0 1 450 280 L 450 265 L 480 265" />
+                <path id="fa-p-xor2-sum" class="wire-pulse hidden" d="M 385 135 L 560 135" />
+                <path id="fa-p-or-carry" class="wire-pulse hidden" d="M 525 275 L 560 275" />
               </svg>
 
               <!-- VIEW 2: HIERARCHICAL BLOCK VIEW SVG (Hidden initially) -->
-              <svg id="fs-block-svg" class="logic-svg hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 450">
+              <svg id="fa-block-svg" class="logic-svg hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 450">
                 <rect width="100%" height="100%" fill="url(#schematic-grid)" />
 
                 <!-- Inputs -->
                 <g class="input-node" transform="translate(50, 100)">
                   <text x="-35" y="5" fill="var(--text-bright)" font-family="JetBrains Mono" font-weight="700">A</text>
-                  <circle id="fs-block-in-a" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="fa-block-in-a" class="terminal-node" cx="0" cy="0" r="8" />
                   <foreignObject x="-30" y="-35" width="24" height="24">
-                    <button class="node-toggle" id="fs-block-switch-a">0</button>
+                    <button class="node-toggle" id="fa-block-switch-a">0</button>
                   </foreignObject>
                 </g>
                 <g class="input-node" transform="translate(50, 150)">
                   <text x="-35" y="5" fill="var(--text-bright)" font-family="JetBrains Mono" font-weight="700">B</text>
-                  <circle id="fs-block-in-b" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="fa-block-in-b" class="terminal-node" cx="0" cy="0" r="8" />
                   <foreignObject x="-30" y="-35" width="24" height="24">
-                    <button class="node-toggle" id="fs-block-switch-b">0</button>
+                    <button class="node-toggle" id="fa-block-switch-b">0</button>
                   </foreignObject>
                 </g>
                 <g class="input-node" transform="translate(50, 270)">
                   <text x="-35" y="5" fill="var(--text-bright)" font-family="JetBrains Mono" font-weight="700">C<tspan dy="4" font-size="9">in</tspan></text>
-                  <circle id="fs-block-in-bin" class="terminal-node" cx="0" cy="0" r="8" />
+                  <circle id="fa-block-in-cin" class="terminal-node" cx="0" cy="0" r="8" />
                   <foreignObject x="-30" y="-35" width="24" height="24">
-                    <button class="node-toggle" id="fs-block-switch-bin">0</button>
+                    <button class="node-toggle" id="fa-block-switch-cin">0</button>
                   </foreignObject>
                 </g>
 
-                <!-- Half Subtractor 1 Block -->
-                <g id="fs-ha1-block" class="block-box" transform="translate(150, 70)">
+                <!-- Half Adder 1 Block -->
+                <g id="fa-ha1-block" class="block-box" transform="translate(150, 70)">
                   <rect class="block-rect" width="120" height="110" rx="6" />
-                  <text class="block-title" x="60" y="30" text-anchor="middle">Half Subtractor 1</text>
+                  <text class="block-title" x="60" y="30" text-anchor="middle">Half Adder 1</text>
                   <text class="pin-label" x="10" y="35">A</text>
                   <text class="pin-label" x="10" y="85">B</text>
-                  <text class="pin-label" x="90" y="45" text-anchor="end">DIFFERENCE</text>
-                  <text class="pin-label" x="90" y="90" text-anchor="end">BORROW</text>
+                  <text class="pin-label" x="90" y="45" text-anchor="end">SUM</text>
+                  <text class="pin-label" x="90" y="90" text-anchor="end">CARRY</text>
                 </g>
 
-                <!-- Half Subtractor 2 Block -->
-                <g id="fs-ha2-block" class="block-box" transform="translate(340, 130)">
+                <!-- Half Adder 2 Block -->
+                <g id="fa-ha2-block" class="block-box" transform="translate(340, 130)">
                   <rect class="block-rect" width="120" height="110" rx="6" />
-                  <text class="block-title" x="60" y="30" text-anchor="middle">Half Subtractor 2</text>
+                  <text class="block-title" x="60" y="30" text-anchor="middle">Half Adder 2</text>
                   <text class="pin-label" x="10" y="35">A</text>
                   <text class="pin-label" x="10" y="85">B</text>
-                  <text class="pin-label" x="90" y="45" text-anchor="end">DIFFERENCE</text>
-                  <text class="pin-label" x="90" y="90" text-anchor="end">BORROW</text>
+                  <text class="pin-label" x="90" y="45" text-anchor="end">SUM</text>
+                  <text class="pin-label" x="90" y="90" text-anchor="end">CARRY</text>
                 </g>
 
                 <!-- OR Gate -->
-                <g id="fs-block-or-gate" class="gate-group" transform="translate(500, 270)">
+                <g id="fa-block-or-gate" class="gate-group" transform="translate(500, 270)">
                   <path class="gate-body" d="M 0 10 Q 15 25 0 40 Q 25 40 45 25 Q 25 10 0 10" />
                   <text class="gate-label" x="18" y="29">OR</text>
                   <circle class="terminal-node" cx="45" cy="25" r="5" />
                 </g>
 
                 <!-- Wiring -->
-                <path id="fs-wb-a" class="circuit-wire" d="M 50 100 L 150 100" />
-                <path id="fs-wb-b" class="circuit-wire" d="M 50 150 L 150 150" />
-                <path id="fs-wb-bin" class="circuit-wire" d="M 50 270 L 310 270 L 310 215 L 340 215" />
+                <path id="fa-wb-a" class="circuit-wire" d="M 50 100 L 150 100" />
+                <path id="fa-wb-b" class="circuit-wire" d="M 50 150 L 150 150" />
+                <path id="fa-wb-cin" class="circuit-wire" d="M 50 270 L 310 270 L 310 215 L 340 215" />
 
-                <path id="fs-wb-ha1s" class="circuit-wire" d="M 270 115 L 310 115 L 310 165 L 340 165" />
-                <path id="fs-wb-ha1c" class="circuit-wire" d="M 270 160 L 290 160 L 290 320 L 460 320 L 460 300 L 500 300" />
-                <path id="fs-wb-ha2c" class="circuit-wire" d="M 460 220 L 480 220 L 480 280 L 500 280" />
+                <path id="fa-wb-ha1s" class="circuit-wire" d="M 270 115 L 310 115 L 310 165 L 340 165" />
+                <path id="fa-wb-ha1c" class="circuit-wire" d="M 270 160 L 290 160 L 290 320 L 460 320 L 460 300 L 500 300" />
+                <path id="fa-wb-ha2c" class="circuit-wire" d="M 460 220 L 480 220 L 480 280 L 500 280" />
 
-                <path id="fs-wb-difference" class="circuit-wire" d="M 460 175 L 560 175" />
-                <path id="fs-wb-borrow" class="circuit-wire" d="M 545 295 L 560 295" />
+                <path id="fa-wb-sum" class="circuit-wire" d="M 460 175 L 560 175" />
+                <path id="fa-wb-carry" class="circuit-wire" d="M 545 295 L 560 295" />
 
                 <!-- Outputs -->
                 <g class="output-node" transform="translate(560, 175)">
                   <circle class="terminal-node" cx="0" cy="0" r="8" />
-                  <circle id="fs-led-difference-block" class="led-bulb" cx="40" cy="0" r="16" />
-                  <text x="70" y="5" class="led-label">DIFFERENCE (D)</text>
+                  <circle id="fa-led-sum-block" class="led-bulb" cx="40" cy="0" r="16" />
+                  <text x="70" y="5" class="led-label">SUM (S)</text>
                 </g>
                 <g class="output-node" transform="translate(560, 295)">
                   <circle class="terminal-node" cx="0" cy="0" r="8" />
-                  <circle id="fs-led-borrow-block" class="led-bulb" cx="40" cy="0" r="16" />
-                  <text x="70" y="5" class="led-label">B<tspan dy="4" font-size="9">out</tspan></text>
+                  <circle id="fa-led-carry-block" class="led-bulb" cx="40" cy="0" r="16" />
+                  <text x="70" y="5" class="led-label">C<tspan dy="4" font-size="9">out</tspan></text>
                 </g>
 
                 <!-- Signal pulses for block view -->
-                <path id="fs-pb-a" class="wire-pulse hidden" d="M 50 100 L 150 100" />
-                <path id="fs-pb-b" class="wire-pulse hidden" d="M 50 150 L 150 150" />
-                <path id="fs-pb-bin" class="wire-pulse hidden" d="M 50 270 L 310 270 L 310 215 L 340 215" />
-                <path id="fs-pb-ha1s" class="wire-pulse hidden" d="M 270 115 L 310 115 L 310 165 L 340 165" />
-                <path id="fs-pb-ha1c" class="wire-pulse hidden" d="M 270 160 L 290 160 L 290 320 L 460 320 L 460 300 L 500 300" />
-                <path id="fs-pb-ha2c" class="wire-pulse hidden" d="M 460 220 L 480 220 L 480 280 L 500 280" />
-                <path id="fs-pb-difference" class="wire-pulse hidden" d="M 460 175 L 560 175" />
-                <path id="fs-pb-borrow" class="wire-pulse hidden" d="M 545 295 L 560 295" />
+                <path id="fa-pb-a" class="wire-pulse hidden" d="M 50 100 L 150 100" />
+                <path id="fa-pb-b" class="wire-pulse hidden" d="M 50 150 L 150 150" />
+                <path id="fa-pb-cin" class="wire-pulse hidden" d="M 50 270 L 310 270 L 310 215 L 340 215" />
+                <path id="fa-pb-ha1s" class="wire-pulse hidden" d="M 270 115 L 310 115 L 310 165 L 340 165" />
+                <path id="fa-pb-ha1c" class="wire-pulse hidden" d="M 270 160 L 290 160 L 290 320 L 460 320 L 460 300 L 500 300" />
+                <path id="fa-pb-ha2c" class="wire-pulse hidden" d="M 460 220 L 480 220 L 480 280 L 500 280" />
+                <path id="fa-pb-sum" class="wire-pulse hidden" d="M 460 175 L 560 175" />
+                <path id="fa-pb-carry" class="wire-pulse hidden" d="M 545 295 L 560 295" />
               </svg>
             </div>
           </div>
 
           <!-- Interactive Truth Table Column -->
           <div class="card-column data-card">
-            <h3>Understanding Full Subtractors</h3>
-            <p class="description">A <strong>Full Subtractor</strong> adds three bits: inputs A, B, and a borrow-in bit B<sub>in</sub> from a previous column. It outputs a <strong>DIFFERENCE</strong> and a new borrow-out <strong>B<sub>out</sub></strong>.</p>
-            <p>Look at the block view to see how we chain two Half Subtractors. The first adds A + B. The second adds the result to B<sub>in</sub>. An OR gate captures if either subtractor generated a borrow.</p>
+            <h3>Understanding Full Adders</h3>
+            <p class="description">A <strong>Full Adder</strong> adds three bits: inputs A, B, and a carry-in bit C<sub>in</sub> from a previous column. It outputs a <strong>SUM</strong> and a new carry-out <strong>C<sub>out</sub></strong>.</p>
+            <p>Look at the block view to see how we chain two Half Adders. The first adds A + B. The second adds the result to C<sub>in</sub>. An OR gate captures if either adder generated a carry.</p>
 
             <h3>Interactive Truth Table (8 States)</h3>
             <div class="table-container large-table">
-              <table id="fs-truth-table" class="truth-table">
+              <table id="fa-truth-table" class="truth-table">
                 <thead>
                   <tr>
                     <th>A</th>
                     <th>B</th>
-                    <th>B<sub>in</sub></th>
-                    <th>DIFFERENCE</th>
-                    <th>B<sub>out</sub></th>
+                    <th>C<sub>in</sub></th>
+                    <th>SUM</th>
+                    <th>C<sub>out</sub></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1126,8 +1116,8 @@
             <div class="card-header-actions">
               <h3>K-Map Playground</h3>
               <div class="view-controls">
-                <button id="btn-kmap-view-ha" class="toggle-switch-btn active">Half Subtractor</button>
-                <button id="btn-kmap-view-fa" class="toggle-switch-btn">Full Subtractor</button>
+                <button id="btn-kmap-view-ha" class="toggle-switch-btn active">Half Adder</button>
+                <button id="btn-kmap-view-fa" class="toggle-switch-btn">Full Adder</button>
               </div>
             </div>
 
@@ -1135,24 +1125,24 @@
             <div class="kmap-target-controls">
               <span class="control-label">Target Output:</span>
               <div id="kmap-targets-ha" class="target-buttons">
-                <button id="btn-kmap-target-hs-difference" class="tab-btn active">DIFFERENCE (D)</button>
-                <button id="btn-kmap-target-hs-borrow" class="tab-btn">BORROW (C)</button>
+                <button id="btn-kmap-target-ha-sum" class="tab-btn active">SUM (S)</button>
+                <button id="btn-kmap-target-ha-carry" class="tab-btn">CARRY (C)</button>
               </div>
               <div id="kmap-targets-fa" class="target-buttons hidden">
-                <button id="btn-kmap-target-fs-difference" class="tab-btn">DIFFERENCE (D)</button>
-                <button id="btn-kmap-target-fs-borrow" class="tab-btn active">BORROW (B<sub>out</sub>)</button>
+                <button id="btn-kmap-target-fa-sum" class="tab-btn">SUM (S)</button>
+                <button id="btn-kmap-target-fa-carry" class="tab-btn active">CARRY (C<sub>out</sub>)</button>
               </div>
             </div>
 
             <!-- K-Map workspace displaying the SVG K-maps -->
             <div class="schematic-wrapper kmap-workspace">
-              <!-- Half Subtractor 2x2 Maps Side-By-Side -->
-              <svg id="kmap-hs-svg" class="logic-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 280">
+              <!-- Half Adder 2x2 Maps Side-By-Side -->
+              <svg id="kmap-ha-svg" class="logic-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 280">
                 <rect width="100%" height="100%" fill="url(#schematic-grid)" />
 
-                <!-- Left Map: DIFFERENCE -->
+                <!-- Left Map: SUM -->
                 <g transform="translate(20, 20)">
-                  <text x="70" y="20" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="var(--accent-cyan)" text-anchor="middle">DIFFERENCE (D) K-Map</text>
+                  <text x="70" y="20" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="var(--accent-cyan)" text-anchor="middle">SUM (S) K-Map</text>
                   <!-- Labels A & B -->
                   <text x="10" y="55" font-family="JetBrains Mono" font-size="10" fill="var(--text-muted)">B \ A</text>
                   <text x="70" y="55" font-family="JetBrains Mono" font-size="10" fill="var(--text-muted)" text-anchor="middle">0</text>
@@ -1161,30 +1151,30 @@
                   <text x="25" y="155" font-family="JetBrains Mono" font-size="10" fill="var(--text-muted)" text-anchor="middle">1</text>
 
                   <!-- Cells -->
-                  <g class="kmap-cell-g" data-map="hs-difference" data-row="0" data-col="0">
+                  <g class="kmap-cell-g" data-map="ha-sum" data-row="0" data-col="0">
                     <rect class="kmap-cell-rect" x="40" y="70" width="60" height="60" rx="4" />
                     <text class="kmap-cell-val" x="70" y="105" text-anchor="middle">0</text>
                   </g>
-                  <g class="kmap-cell-g" data-map="hs-difference" data-row="0" data-col="1">
+                  <g class="kmap-cell-g" data-map="ha-sum" data-row="0" data-col="1">
                     <rect class="kmap-cell-rect" x="100" y="70" width="60" height="60" rx="4" />
                     <text class="kmap-cell-val" x="130" y="105" text-anchor="middle">1</text>
                   </g>
-                  <g class="kmap-cell-g" data-map="hs-difference" data-row="1" data-col="0">
+                  <g class="kmap-cell-g" data-map="ha-sum" data-row="1" data-col="0">
                     <rect class="kmap-cell-rect" x="40" y="130" width="60" height="60" rx="4" />
                     <text class="kmap-cell-val" x="70" y="165" text-anchor="middle">1</text>
                   </g>
-                  <g class="kmap-cell-g" data-map="hs-difference" data-row="1" data-col="1">
+                  <g class="kmap-cell-g" data-map="ha-sum" data-row="1" data-col="1">
                     <rect class="kmap-cell-rect" x="100" y="130" width="60" height="60" rx="4" />
                     <text class="kmap-cell-val" x="130" y="165" text-anchor="middle">0</text>
                   </g>
 
                   <!-- SVG Dynamic Group Loops container -->
-                  <g id="kmap-hs-difference-loops" class="kmap-loops-g"></g>
+                  <g id="kmap-ha-sum-loops" class="kmap-loops-g"></g>
                 </g>
 
-                <!-- Right Map: BORROW -->
+                <!-- Right Map: CARRY -->
                 <g transform="translate(280, 20)">
-                  <text x="70" y="20" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="var(--accent-amber)" text-anchor="middle">BORROW (C) K-Map</text>
+                  <text x="70" y="20" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="var(--accent-amber)" text-anchor="middle">CARRY (C) K-Map</text>
                   <!-- Labels A & B -->
                   <text x="10" y="55" font-family="JetBrains Mono" font-size="10" fill="var(--text-muted)">B \ A</text>
                   <text x="70" y="55" font-family="JetBrains Mono" font-size="10" fill="var(--text-muted)" text-anchor="middle">0</text>
@@ -1193,34 +1183,34 @@
                   <text x="25" y="155" font-family="JetBrains Mono" font-size="10" fill="var(--text-muted)" text-anchor="middle">1</text>
 
                   <!-- Cells -->
-                  <g class="kmap-cell-g" data-map="hs-borrow" data-row="0" data-col="0">
+                  <g class="kmap-cell-g" data-map="ha-carry" data-row="0" data-col="0">
                     <rect class="kmap-cell-rect" x="40" y="70" width="60" height="60" rx="4" />
                     <text class="kmap-cell-val" x="70" y="105" text-anchor="middle">0</text>
                   </g>
-                  <g class="kmap-cell-g" data-map="hs-borrow" data-row="0" data-col="1">
+                  <g class="kmap-cell-g" data-map="ha-carry" data-row="0" data-col="1">
                     <rect class="kmap-cell-rect" x="100" y="70" width="60" height="60" rx="4" />
                     <text class="kmap-cell-val" x="130" y="105" text-anchor="middle">0</text>
                   </g>
-                  <g class="kmap-cell-g" data-map="hs-borrow" data-row="1" data-col="0">
+                  <g class="kmap-cell-g" data-map="ha-carry" data-row="1" data-col="0">
                     <rect class="kmap-cell-rect" x="40" y="130" width="60" height="60" rx="4" />
                     <text class="kmap-cell-val" x="70" y="165" text-anchor="middle">0</text>
                   </g>
-                  <g class="kmap-cell-g" data-map="hs-borrow" data-row="1" data-col="1">
+                  <g class="kmap-cell-g" data-map="ha-carry" data-row="1" data-col="1">
                     <rect class="kmap-cell-rect" x="100" y="130" width="60" height="60" rx="4" />
                     <text class="kmap-cell-val" x="130" y="165" text-anchor="middle">1</text>
                   </g>
 
                   <!-- SVG Dynamic Group Loops container -->
-                  <g id="kmap-hs-borrow-loops" class="kmap-loops-g"></g>
+                  <g id="kmap-ha-carry-loops" class="kmap-loops-g"></g>
                 </g>
               </svg>
 
-              <!-- Full Subtractor 4x2 Map -->
-              <svg id="kmap-fs-svg" class="logic-svg hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 280">
+              <!-- Full Adder 4x2 Map -->
+              <svg id="kmap-fa-svg" class="logic-svg hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 280">
                 <rect width="100%" height="100%" fill="url(#schematic-grid)" />
 
                 <g transform="translate(60, 20)">
-                  <text id="kmap-fs-title" x="180" y="20" font-family="JetBrains Mono" font-size="14" font-weight="700" fill="var(--accent-cyan)" text-anchor="middle">BORROW (Bout) K-Map</text>
+                  <text id="kmap-fa-title" x="180" y="20" font-family="JetBrains Mono" font-size="14" font-weight="700" fill="var(--accent-cyan)" text-anchor="middle">CARRY (Cout) K-Map</text>
                   
                   <!-- Column Labels -->
                   <text x="40" y="50" font-family="JetBrains Mono" font-size="10" fill="var(--text-muted)">A \ BCin</text>
@@ -1270,7 +1260,7 @@
                   </g>
 
                   <!-- SVG Dynamic Group Loops container -->
-                  <g id="kmap-fs-loops" class="kmap-loops-g"></g>
+                  <g id="kmap-fa-loops" class="kmap-loops-g"></g>
                 </g>
               </svg>
             </div>
@@ -1289,7 +1279,7 @@
             <!-- Guided instruction panels -->
             <div class="instructions-panel">
               <h4 id="kmap-step-title">Guided Task</h4>
-              <p id="kmap-instructions" class="description">Select the cell(s) that represent the active BORROW outputs. Click cells to toggle their selection.</p>
+              <p id="kmap-instructions" class="description">Select the cell(s) that represent the active CARRY outputs. Click cells to toggle their selection.</p>
               <div id="kmap-alert-box" class="feedback-text mt-4"></div>
             </div>
 
@@ -1349,11 +1339,11 @@
           <div class="sandbox-controls">
             <div class="instructions-panel">
               <h3>Sandbox Mission</h3>
-              <p id="sandbox-goal-text">Construct a working <strong>Half Subtractor</strong>! Place gates on the grid and wire inputs to outputs. Complete the truth table to unlock.</p>
+              <p id="sandbox-goal-text">Construct a working <strong>Half Adder</strong>! Place gates on the grid and wire inputs to outputs. Complete the truth table to unlock.</p>
               
               <div class="mission-selector">
-                <button id="btn-mission-ha" class="tab-btn active">Mission: Half Subtractor</button>
-                <button id="btn-mission-fa" class="tab-btn">Mission: Full Subtractor</button>
+                <button id="btn-mission-ha" class="tab-btn active">Mission: Half Adder</button>
+                <button id="btn-mission-fa" class="tab-btn">Mission: Full Adder</button>
               </div>
             </div>
 
@@ -1373,10 +1363,6 @@
                 <div class="palette-item" draggable="true" data-gate-type="OR">
                   <div class="palette-icon or-icon"></div>
                   <span>OR</span>
-                </div>
-                <div class="palette-item" draggable="true" data-gate-type="NOT">
-                  <div class="palette-icon not-icon"></div>
-                  <span>NOT</span>
                 </div>
               </div>
             </div>
@@ -1424,7 +1410,7 @@
                   <div class="success-content">
                     <div class="trophy-pulse">🏆</div>
                     <h2>Circuit Complete!</h2>
-                    <p id="sandbox-success-msg">Your wiring successfully solves the Half Subtractor truth table!</p>
+                    <p id="sandbox-success-msg">Your wiring successfully solves the Half Adder truth table!</p>
                     <button id="btn-sandbox-success-close" class="btn primary">Continue</button>
                   </div>
                 </div>
@@ -1434,23 +1420,23 @@
         </div>
         
         <div class="step-footer mt-4">
-          <button class="btn primary next-step-btn" data-next="module-ripple-borrow">Proceed to Ripple Borrow Playground &rarr;</button>
+          <button class="btn primary next-step-btn" data-next="module-ripple-carry">Proceed to Ripple Carry Playground &rarr;</button>
         </div>
       </section>
 
-      <!-- ==================== MODULE 6: RIPPLE BORROW PLAYGROUND ==================== -->
-      <section id="module-ripple-borrow" class="lab-section">
+      <!-- ==================== MODULE 6: RIPPLE CARRY PLAYGROUND ==================== -->
+      <section id="module-ripple-carry" class="lab-section">
         <div class="section-header">
-          <h2>Module 6: 4-Bit Ripple-Borrow Playground</h2>
+          <h2>Module 6: 4-Bit Ripple-Carry Playground</h2>
           <span class="module-difficulty">Advanced Logic</span>
         </div>
         <div class="section-card">
           <div class="playground-intro">
-            <p>What happens when we want to add numbers larger than 1? We chain Full Subtractors together! The <strong>Borrow-Out (B<sub>out</sub>)</strong> of each column connects directly to the <strong>Borrow-In (B<sub>in</sub>)</strong> of the next column to the left.</p>
-            <p class="highlight-text">Watch the Borrow bit "ripple" (propagate) leftwards, adding a physical gate delay at every stage!</p>
+            <p>What happens when we want to add numbers larger than 1? We chain Full Adders together! The <strong>Carry-Out (C<sub>out</sub>)</strong> of each column connects directly to the <strong>Carry-In (C<sub>in</sub>)</strong> of the next column to the left.</p>
+            <p class="highlight-text">Watch the Carry bit "ripple" (propagate) leftwards, adding a physical gate delay at every stage!</p>
           </div>
 
-          <!-- Ripple Borrow Dashboard -->
+          <!-- Ripple Carry Dashboard -->
           <div class="ripple-dashboard grid-split-equal">
             <!-- Left inputs panel -->
             <div class="ripple-inputs-panel">
@@ -1497,7 +1483,7 @@
                   <div class="formula-row"><span class="val-label">A = </span><span id="formula-bin-a" class="bin-code">0000₂</span> <span id="formula-dec-a" class="dec-lbl">(0)</span></div>
                   <div class="formula-row"><span class="val-label">+ B = </span><span id="formula-bin-b" class="bin-code">0000₂</span> <span id="formula-dec-b" class="dec-lbl">(0)</span></div>
                   <hr>
-                  <div class="formula-row"><span class="val-label">Difference = </span><span id="formula-bin-difference" class="bin-code">00000₂</span> <span id="formula-dec-difference" class="dec-lbl">(0)</span></div>
+                  <div class="formula-row"><span class="val-label">Sum = </span><span id="formula-bin-sum" class="bin-code">00000₂</span> <span id="formula-dec-sum" class="dec-lbl">(0)</span></div>
                 </div>
                 <div id="ripple-overflow-alert" class="overflow-badge hidden">
                   ⚠️ OVERFLOW DETECTED (5-Bit Output)
@@ -1555,11 +1541,11 @@
                 <circle id="rc-node-s0" class="terminal-node" cx="65" cy="120" r="5" /><text x="65" y="135" class="port-label">S₀</text>
               </g>
 
-              <!-- Inter-stage borrow links -->
-              <path id="rc-borrow-wire-0-1" class="circuit-wire" d="M 640 100 Q 610 100 610 100 T 580 100" />
-              <path id="rc-borrow-wire-1-2" class="circuit-wire" d="M 450 100 Q 420 100 420 100 T 390 100" />
-              <path id="rc-borrow-wire-2-3" class="circuit-wire" d="M 260 100 Q 230 100 230 100 T 200 100" />
-              <path id="rc-borrow-wire-3-ov" class="circuit-wire" d="M 70 100 L 25 100 L 25 210 L 50 210" />
+              <!-- Inter-stage carry links -->
+              <path id="rc-carry-wire-0-1" class="circuit-wire" d="M 640 100 Q 610 100 610 100 T 580 100" />
+              <path id="rc-carry-wire-1-2" class="circuit-wire" d="M 450 100 Q 420 100 420 100 T 390 100" />
+              <path id="rc-carry-wire-2-3" class="circuit-wire" d="M 260 100 Q 230 100 230 100 T 200 100" />
+              <path id="rc-carry-wire-3-ov" class="circuit-wire" d="M 70 100 L 25 100 L 25 210 L 50 210" />
 
               <!-- Output Connections to bottom display -->
               <path id="rc-s0-wire" class="circuit-wire" d="M 705 160 L 705 210" />
@@ -1569,31 +1555,31 @@
 
               <!-- Output LED representations -->
               <g transform="translate(50, 210)">
-                <circle id="rc-led-b4" class="led-bulb small overflow-led" cx="0" cy="0" r="10" />
+                <circle id="rc-led-c4" class="led-bulb small overflow-led" cx="0" cy="0" r="10" />
                 <text x="15" y="4" class="led-label tiny">C₄ (Overflow)</text>
               </g>
               <g transform="translate(135, 210)">
-                <circle id="rc-led-d3" class="led-bulb small" cx="0" cy="0" r="10" />
+                <circle id="rc-led-s3" class="led-bulb small" cx="0" cy="0" r="10" />
                 <text x="15" y="4" class="led-label tiny">S₃</text>
               </g>
               <g transform="translate(325, 210)">
-                <circle id="rc-led-d2" class="led-bulb small" cx="0" cy="0" r="10" />
+                <circle id="rc-led-s2" class="led-bulb small" cx="0" cy="0" r="10" />
                 <text x="15" y="4" class="led-label tiny">S₂</text>
               </g>
               <g transform="translate(515, 210)">
-                <circle id="rc-led-d1" class="led-bulb small" cx="0" cy="0" r="10" />
+                <circle id="rc-led-s1" class="led-bulb small" cx="0" cy="0" r="10" />
                 <text x="15" y="4" class="led-label tiny">S₁</text>
               </g>
               <g transform="translate(705, 210)">
-                <circle id="rc-led-d0" class="led-bulb small" cx="0" cy="0" r="10" />
+                <circle id="rc-led-s0" class="led-bulb small" cx="0" cy="0" r="10" />
                 <text x="15" y="4" class="led-label tiny">S₀</text>
               </g>
 
-              <!-- Pulses for Borrow Propagation -->
-              <path id="rc-borrow-pulse-0-1" class="wire-pulse hidden" d="M 640 100 Q 610 100 610 100 T 580 100" />
-              <path id="rc-borrow-pulse-1-2" class="wire-pulse hidden" d="M 450 100 Q 420 100 420 100 T 390 100" />
-              <path id="rc-borrow-pulse-2-3" class="wire-pulse hidden" d="M 260 100 Q 230 100 230 100 T 200 100" />
-              <path id="rc-borrow-pulse-3-ov" class="wire-pulse hidden" d="M 70 100 L 25 100 L 25 210 L 50 210" />
+              <!-- Pulses for Carry Propagation -->
+              <path id="rc-carry-pulse-0-1" class="wire-pulse hidden" d="M 640 100 Q 610 100 610 100 T 580 100" />
+              <path id="rc-carry-pulse-1-2" class="wire-pulse hidden" d="M 450 100 Q 420 100 420 100 T 390 100" />
+              <path id="rc-carry-pulse-2-3" class="wire-pulse hidden" d="M 260 100 Q 230 100 230 100 T 200 100" />
+              <path id="rc-carry-pulse-3-ov" class="wire-pulse hidden" d="M 70 100 L 25 100 L 25 210 L 50 210" />
             </svg>
           </div>
         </div>
@@ -1613,10 +1599,10 @@
           <!-- Breadboard panel -->
           <div class="card-column logic-diagram-card large">
             <div class="card-header-actions">
-              <h3 id="bb-lab-title">Breadboard Lab (Half Subtractor Mapping)</h3>
+              <h3 id="bb-lab-title">Breadboard Lab (Half Adder Mapping)</h3>
               <div class="view-controls">
-                <button id="btn-bb-view-ha" class="toggle-switch-btn active">Half Subtractor</button>
-                <button id="btn-bb-view-fa" class="toggle-switch-btn">Full Subtractor</button>
+                <button id="btn-bb-view-ha" class="toggle-switch-btn active">Half Adder</button>
+                <button id="btn-bb-view-fa" class="toggle-switch-btn">Full Adder</button>
               </div>
               <div class="signal-legend">
                 <span class="legend-item"><span class="legend-dot vcc"></span> +5V (VCC)</span>
@@ -1625,10 +1611,10 @@
             </div>
 
             <div class="schematic-wrapper">
-              <!-- VIEW 1: HALF SUBTRACTOR BREADBOARD SVG -->
-              <svg id="breadboard-hs-svg" class="logic-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 400">
+              <!-- VIEW 1: HALF ADDER BREADBOARD SVG -->
+              <svg id="breadboard-ha-svg" class="logic-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 400">
                 <defs>
-                  <pattern id="bb-hs-holes" width="10" height="10" patternUnits="userSpaceOnUse">
+                  <pattern id="bb-ha-holes" width="10" height="10" patternUnits="userSpaceOnUse">
                     <circle cx="5" cy="5" r="1.8" fill="#475569" />
                   </pattern>
                 </defs>
@@ -1636,12 +1622,12 @@
                 <rect x="20" y="40" width="640" height="320" rx="10" fill="#dedede" stroke="#a0a0a0" stroke-width="3" />
                 
                 <!-- Contact holes overlay -->
-                <rect x="40" y="48" width="600" height="12" fill="url(#bb-hs-holes)" opacity="0.65" />
-                <rect x="40" y="63" width="600" height="12" fill="url(#bb-hs-holes)" opacity="0.65" />
-                <rect x="40" y="88" width="600" height="52" fill="url(#bb-hs-holes)" opacity="0.85" />
-                <rect x="40" y="248" width="600" height="52" fill="url(#bb-hs-holes)" opacity="0.85" />
-                <rect x="40" y="323" width="600" height="12" fill="url(#bb-hs-holes)" opacity="0.65" />
-                <rect x="40" y="338" width="600" height="12" fill="url(#bb-hs-holes)" opacity="0.65" />
+                <rect x="40" y="48" width="600" height="12" fill="url(#bb-ha-holes)" opacity="0.65" />
+                <rect x="40" y="63" width="600" height="12" fill="url(#bb-ha-holes)" opacity="0.65" />
+                <rect x="40" y="88" width="600" height="52" fill="url(#bb-ha-holes)" opacity="0.85" />
+                <rect x="40" y="248" width="600" height="52" fill="url(#bb-ha-holes)" opacity="0.85" />
+                <rect x="40" y="323" width="600" height="12" fill="url(#bb-ha-holes)" opacity="0.65" />
+                <rect x="40" y="338" width="600" height="12" fill="url(#bb-ha-holes)" opacity="0.65" />
                 
                 <line x1="40" y1="55" x2="640" y2="55" stroke="#cc3333" stroke-width="2" stroke-dasharray="10 5" />
                 <line x1="40" y1="70" x2="640" y2="70" stroke="#3333cc" stroke-width="2" stroke-dasharray="10 5" />
@@ -1649,7 +1635,7 @@
                 <line x1="40" y1="345" x2="640" y2="345" stroke="#3333cc" stroke-width="2" stroke-dasharray="10 5" />
 
                 <!-- IC 1: 74LS86 (XOR) -->
-                <g id="ic-bb-hs-74ls86" class="ic-chip" transform="translate(180, 150)">
+                <g id="ic-bb-ha-74ls86" class="ic-chip" transform="translate(180, 150)">
                   <rect class="ic-body" width="130" height="70" rx="4" fill="#1f1f1f" stroke="#3a3a3a" />
                   <rect class="ic-notch" x="0" y="25" width="8" height="20" rx="2" fill="#dedede" />
                   <text class="ic-text" x="65" y="40" text-anchor="middle" font-family="JetBrains Mono" font-size="12" fill="#a0a0a0">74LS86 (XOR)</text>
@@ -1676,7 +1662,7 @@
                 </g>
 
                 <!-- IC 2: 74LS08 (AND) -->
-                <g id="ic-bb-hs-74ls08" class="ic-chip" transform="translate(370, 150)">
+                <g id="ic-bb-ha-74ls08" class="ic-chip" transform="translate(370, 150)">
                   <rect class="ic-body" width="130" height="70" rx="4" fill="#1f1f1f" stroke="#3a3a3a" />
                   <rect class="ic-notch" x="0" y="25" width="8" height="20" rx="2" fill="#dedede" />
                   <text class="ic-text" x="65" y="40" text-anchor="middle" font-family="JetBrains Mono" font-size="12" fill="#a0a0a0">74LS08 (AND)</text>
@@ -1705,13 +1691,13 @@
                 <!-- Switched Input Nodes & Wires on Breadboard -->
                 <g class="bb-switch" transform="translate(60, 240)">
                   <circle cx="0" cy="0" r="10" fill="#444" stroke="#777" />
-                  <circle id="bb-hs-switch-a-knob" cx="0" cy="0" r="5" fill="#aaa" />
+                  <circle id="bb-ha-switch-a-knob" cx="0" cy="0" r="5" fill="#aaa" />
                   <text x="-35" y="4" font-family="JetBrains Mono" font-weight="700" fill="#fff" font-size="11">A</text>
                 </g>
 
                 <g class="bb-switch" transform="translate(100, 240)">
                   <circle cx="0" cy="0" r="10" fill="#444" stroke="#777" />
-                  <circle id="bb-hs-switch-b-knob" cx="0" cy="0" r="5" fill="#aaa" />
+                  <circle id="bb-ha-switch-b-knob" cx="0" cy="0" r="5" fill="#aaa" />
                   <text x="-35" y="4" font-family="JetBrains Mono" font-weight="700" fill="#fff" font-size="11">B</text>
                 </g>
 
@@ -1724,33 +1710,33 @@
                 <path class="bb-wire gnd-wire" d="M 493 345 L 493 225" />
 
                 <!-- Logic Wire A: Switch A -> 74LS86 Pin 1 & 74LS08 Pin 1 -->
-                <path id="bb-hs-wire-a1" class="bb-wire logic-wire" d="M 60 240 L 60 120 L 195 120 L 195 225" />
-                <path id="bb-hs-wire-a2" class="bb-wire logic-wire" d="M 195 120 L 385 120 L 385 225" />
+                <path id="bb-ha-wire-a1" class="bb-wire logic-wire" d="M 60 240 L 60 120 L 195 120 L 195 225" />
+                <path id="bb-ha-wire-a2" class="bb-wire logic-wire" d="M 195 120 L 385 120 L 385 225" />
 
                 <!-- Logic Wire B: Switch B -> 74LS86 Pin 2 & 74LS08 Pin 2 -->
-                <path id="bb-hs-wire-b1" class="bb-wire logic-wire" d="M 100 240 L 100 130 L 213 130 L 213 225" />
-                <path id="bb-hs-wire-b2" class="bb-wire logic-wire" d="M 213 130 L 403 130 L 403 225" />
+                <path id="bb-ha-wire-b1" class="bb-wire logic-wire" d="M 100 240 L 100 130 L 213 130 L 213 225" />
+                <path id="bb-ha-wire-b2" class="bb-wire logic-wire" d="M 213 130 L 403 130 L 403 225" />
 
-                <!-- Logic Wire DIFFERENCE: 74LS86 Pin 3 -> LED DIFFERENCE -->
-                <path id="bb-hs-wire-difference" class="bb-wire logic-wire" d="M 231 225 L 231 280 L 550 280" />
-                <!-- Logic Wire BORROW: 74LS08 Pin 3 -> LED BORROW -->
-                <path id="bb-hs-wire-borrow" class="bb-wire logic-wire" d="M 421 225 L 421 300 L 590 300" />
+                <!-- Logic Wire SUM: 74LS86 Pin 3 -> LED SUM -->
+                <path id="bb-ha-wire-sum" class="bb-wire logic-wire" d="M 231 225 L 231 280 L 550 280" />
+                <!-- Logic Wire CARRY: 74LS08 Pin 3 -> LED CARRY -->
+                <path id="bb-ha-wire-carry" class="bb-wire logic-wire" d="M 421 225 L 421 300 L 590 300" />
 
                 <!-- Output LEDs -->
                 <g class="bb-led" transform="translate(550, 280)">
-                  <circle id="bb-hs-led-difference" class="led-bulb small" cx="0" cy="0" r="8" />
-                  <text x="-15" y="-12" class="led-label tiny">DIFFERENCE</text>
+                  <circle id="bb-ha-led-sum" class="led-bulb small" cx="0" cy="0" r="8" />
+                  <text x="-15" y="-12" class="led-label tiny">SUM</text>
                 </g>
                 <g class="bb-led" transform="translate(590, 300)">
-                  <circle id="bb-hs-led-borrow" class="led-bulb small" cx="0" cy="0" r="8" />
-                  <text x="-15" y="-12" class="led-label tiny">BORROW</text>
+                  <circle id="bb-ha-led-carry" class="led-bulb small" cx="0" cy="0" r="8" />
+                  <text x="-15" y="-12" class="led-label tiny">CARRY</text>
                 </g>
               </svg>
 
-              <!-- VIEW 2: FULL SUBTRACTOR BREADBOARD SVG -->
-              <svg id="breadboard-fs-svg" class="logic-svg hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 400">
+              <!-- VIEW 2: FULL ADDER BREADBOARD SVG -->
+              <svg id="breadboard-fa-svg" class="logic-svg hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 400">
                 <defs>
-                  <pattern id="bb-fs-holes" width="10" height="10" patternUnits="userSpaceOnUse">
+                  <pattern id="bb-fa-holes" width="10" height="10" patternUnits="userSpaceOnUse">
                     <circle cx="5" cy="5" r="1.8" fill="#475569" />
                   </pattern>
                 </defs>
@@ -1758,12 +1744,12 @@
                 <rect x="20" y="40" width="700" height="320" rx="10" fill="#dedede" stroke="#a0a0a0" stroke-width="3" />
                 
                 <!-- Contact holes overlay -->
-                <rect x="40" y="48" width="660" height="12" fill="url(#bb-fs-holes)" opacity="0.65" />
-                <rect x="40" y="63" width="660" height="12" fill="url(#bb-fs-holes)" opacity="0.65" />
-                <rect x="40" y="88" width="660" height="52" fill="url(#bb-fs-holes)" opacity="0.85" />
-                <rect x="40" y="248" width="660" height="52" fill="url(#bb-fs-holes)" opacity="0.85" />
-                <rect x="40" y="323" width="660" height="12" fill="url(#bb-fs-holes)" opacity="0.65" />
-                <rect x="40" y="338" width="660" height="12" fill="url(#bb-fs-holes)" opacity="0.65" />
+                <rect x="40" y="48" width="660" height="12" fill="url(#bb-fa-holes)" opacity="0.65" />
+                <rect x="40" y="63" width="660" height="12" fill="url(#bb-fa-holes)" opacity="0.65" />
+                <rect x="40" y="88" width="660" height="52" fill="url(#bb-fa-holes)" opacity="0.85" />
+                <rect x="40" y="248" width="660" height="52" fill="url(#bb-fa-holes)" opacity="0.85" />
+                <rect x="40" y="323" width="660" height="12" fill="url(#bb-fa-holes)" opacity="0.65" />
+                <rect x="40" y="338" width="660" height="12" fill="url(#bb-fa-holes)" opacity="0.65" />
                 
                 <line x1="40" y1="55" x2="700" y2="55" stroke="#cc3333" stroke-width="2" stroke-dasharray="10 5" />
                 <line x1="40" y1="70" x2="700" y2="70" stroke="#3333cc" stroke-width="2" stroke-dasharray="10 5" />
@@ -1771,7 +1757,7 @@
                 <line x1="40" y1="345" x2="700" y2="345" stroke="#3333cc" stroke-width="2" stroke-dasharray="10 5" />
 
                 <!-- IC 1: 74LS86 (XOR) at 170, 150 -->
-                <g id="ic-bb-fs-74ls86" class="ic-chip" transform="translate(170, 150)">
+                <g id="ic-bb-fa-74ls86" class="ic-chip" transform="translate(170, 150)">
                   <rect class="ic-body" width="130" height="70" rx="4" fill="#1f1f1f" stroke="#3a3a3a" />
                   <rect class="ic-notch" x="0" y="25" width="8" height="20" rx="2" fill="#dedede" />
                   <text class="ic-text" x="65" y="40" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#a0a0a0">74LS86 (XOR)</text>
@@ -1796,7 +1782,7 @@
                 </g>
 
                 <!-- IC 2: 74LS08 (AND) at 340, 150 -->
-                <g id="ic-bb-fs-74ls08" class="ic-chip" transform="translate(340, 150)">
+                <g id="ic-bb-fa-74ls08" class="ic-chip" transform="translate(340, 150)">
                   <rect class="ic-body" width="130" height="70" rx="4" fill="#1f1f1f" stroke="#3a3a3a" />
                   <rect class="ic-notch" x="0" y="25" width="8" height="20" rx="2" fill="#dedede" />
                   <text class="ic-text" x="65" y="40" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#a0a0a0">74LS08 (AND)</text>
@@ -1821,7 +1807,7 @@
                 </g>
 
                 <!-- IC 3: 74LS32 (OR) at 510, 150 -->
-                <g id="ic-bb-fs-74ls32" class="ic-chip" transform="translate(510, 150)">
+                <g id="ic-bb-fa-74ls32" class="ic-chip" transform="translate(510, 150)">
                   <rect class="ic-body" width="130" height="70" rx="4" fill="#1f1f1f" stroke="#3a3a3a" />
                   <rect class="ic-notch" x="0" y="25" width="8" height="20" rx="2" fill="#dedede" />
                   <text class="ic-text" x="65" y="40" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#a0a0a0">74LS32 (OR)</text>
@@ -1848,17 +1834,17 @@
                 <!-- Input Switches -->
                 <g class="bb-switch" transform="translate(50, 250)">
                   <circle cx="0" cy="0" r="10" fill="#444" stroke="#777" />
-                  <circle id="bb-fs-switch-a-knob" cx="0" cy="0" r="5" fill="#aaa" />
+                  <circle id="bb-fa-switch-a-knob" cx="0" cy="0" r="5" fill="#aaa" />
                   <text x="-35" y="4" font-family="JetBrains Mono" font-weight="700" fill="#fff" font-size="11">A</text>
                 </g>
                 <g class="bb-switch" transform="translate(85, 250)">
                   <circle cx="0" cy="0" r="10" fill="#444" stroke="#777" />
-                  <circle id="bb-fs-switch-b-knob" cx="0" cy="0" r="5" fill="#aaa" />
+                  <circle id="bb-fa-switch-b-knob" cx="0" cy="0" r="5" fill="#aaa" />
                   <text x="-35" y="4" font-family="JetBrains Mono" font-weight="700" fill="#fff" font-size="11">B</text>
                 </g>
                 <g class="bb-switch" transform="translate(120, 250)">
                   <circle cx="0" cy="0" r="10" fill="#444" stroke="#777" />
-                  <circle id="bb-fs-switch-bin-knob" cx="0" cy="0" r="5" fill="#aaa" />
+                  <circle id="bb-fa-switch-cin-knob" cx="0" cy="0" r="5" fill="#aaa" />
                   <text x="-35" y="4" font-family="JetBrains Mono" font-weight="700" fill="#fff" font-size="11">C<tspan dy="3" font-size="9">in</tspan></text>
                 </g>
 
@@ -1871,34 +1857,34 @@
                 <path class="bb-wire gnd-wire" d="M 463 345 L 463 225" />
                 <path class="bb-wire gnd-wire" d="M 633 345 L 633 225" />
 
-                <!-- Logic Wires for Full Subtractor -->
-                <path id="bb-fs-wire-a1" class="bb-wire logic-wire" d="M 50 250 L 50 110 L 185 110 L 185 225" />
-                <path id="bb-fs-wire-a2" class="bb-wire logic-wire" d="M 185 110 L 355 110 L 355 225" />
+                <!-- Logic Wires for Full Adder -->
+                <path id="bb-fa-wire-a1" class="bb-wire logic-wire" d="M 50 250 L 50 110 L 185 110 L 185 225" />
+                <path id="bb-fa-wire-a2" class="bb-wire logic-wire" d="M 185 110 L 355 110 L 355 225" />
 
-                <path id="bb-fs-wire-b1" class="bb-wire logic-wire" d="M 85 250 L 85 120 L 203 120 L 203 225" />
-                <path id="bb-fs-wire-b2" class="bb-wire logic-wire" d="M 203 120 L 373 120 L 373 225" />
+                <path id="bb-fa-wire-b1" class="bb-wire logic-wire" d="M 85 250 L 85 120 L 203 120 L 203 225" />
+                <path id="bb-fa-wire-b2" class="bb-wire logic-wire" d="M 203 120 L 373 120 L 373 225" />
 
-                <path id="bb-fs-wire-xor1-xor4" class="bb-wire logic-wire" d="M 221 225 L 221 290 L 239 290 L 239 225" />
-                <path id="bb-fs-wire-xor1-and4" class="bb-wire logic-wire" d="M 239 290 L 409 290 L 409 225" />
+                <path id="bb-fa-wire-xor1-xor4" class="bb-wire logic-wire" d="M 221 225 L 221 290 L 239 290 L 239 225" />
+                <path id="bb-fa-wire-xor1-and4" class="bb-wire logic-wire" d="M 239 290 L 409 290 L 409 225" />
 
-                <path id="bb-fs-wire-cin1" class="bb-wire logic-wire" d="M 120 250 L 120 130 L 257 130 L 257 225" />
-                <path id="bb-fs-wire-cin2" class="bb-wire logic-wire" d="M 257 130 L 427 130 L 427 225" />
+                <path id="bb-fa-wire-cin1" class="bb-wire logic-wire" d="M 120 250 L 120 130 L 257 130 L 257 225" />
+                <path id="bb-fa-wire-cin2" class="bb-wire logic-wire" d="M 257 130 L 427 130 L 427 225" />
 
-                <path id="bb-fs-wire-difference" class="bb-wire logic-wire" d="M 275 225 L 275 310 L 660 310 L 660 270" />
+                <path id="bb-fa-wire-sum" class="bb-wire logic-wire" d="M 275 225 L 275 310 L 660 310 L 660 270" />
 
-                <path id="bb-fs-wire-and1" class="bb-wire logic-wire" d="M 391 225 L 391 100 L 525 100 L 525 225" />
-                <path id="bb-fs-wire-and2" class="bb-wire logic-wire" d="M 445 225 L 445 110 L 543 110 L 543 225" />
+                <path id="bb-fa-wire-and1" class="bb-wire logic-wire" d="M 391 225 L 391 100 L 525 100 L 525 225" />
+                <path id="bb-fa-wire-and2" class="bb-wire logic-wire" d="M 445 225 L 445 110 L 543 110 L 543 225" />
 
-                <path id="bb-fs-wire-borrow" class="bb-wire logic-wire" d="M 561 225 L 561 300 L 695 300 L 695 290" />
+                <path id="bb-fa-wire-carry" class="bb-wire logic-wire" d="M 561 225 L 561 300 L 695 300 L 695 290" />
 
                 <!-- Output LEDs -->
                 <g class="bb-led" transform="translate(660, 270)">
-                  <circle id="bb-fs-led-difference" class="led-bulb small" cx="0" cy="0" r="8" />
-                  <text x="-15" y="-12" class="led-label tiny">DIFFERENCE</text>
+                  <circle id="bb-fa-led-sum" class="led-bulb small" cx="0" cy="0" r="8" />
+                  <text x="-15" y="-12" class="led-label tiny">SUM</text>
                 </g>
                 <g class="bb-led" transform="translate(695, 290)">
-                  <circle id="bb-fs-led-borrow" class="led-bulb small" cx="0" cy="0" r="8" />
-                  <text x="-15" y="-12" class="led-label tiny">B<sub>out</sub></text>
+                  <circle id="bb-fa-led-carry" class="led-bulb small" cx="0" cy="0" r="8" />
+                  <text x="-15" y="-12" class="led-label tiny">C<sub>out</sub></text>
                 </g>
               </svg>
             </div>
@@ -1921,7 +1907,7 @@
               <div class="bb-toggles">
                 <button id="bb-btn-switch-a" class="btn secondary">Toggle Switch A (0)</button>
                 <button id="bb-btn-switch-b" class="btn secondary">Toggle Switch B (0)</button>
-                <button id="bb-btn-switch-bin" class="btn secondary hidden">Toggle Switch B<sub>in</sub> (0)</button>
+                <button id="bb-btn-switch-cin" class="btn secondary hidden">Toggle Switch C<sub>in</sub> (0)</button>
               </div>
             </div>
 
@@ -1950,7 +1936,7 @@
         <div id="exam-initiation-panel" class="card exam-init-card">
           <div class="exam-header-icon">🛡️</div>
           <h3>Initiate Assessment Protocol</h3>
-          <p class="description">You are about to start the formal logic subtractor exam. This test evaluates your understanding of Half Subtractors, Full Subtractors, and K-Map simplification under strict proctored guidelines.</p>
+          <p class="description">You are about to start the formal logic adder exam. This test evaluates your understanding of Half Adders, Full Adders, and K-Map simplification under strict proctored guidelines.</p>
           
           <div class="warning-box mt-3 mb-4">
             <h4 class="text-amber">⚠️ EXAM SECURITY PROTOCOL IN EFFECT:</h4>
@@ -2010,7 +1996,7 @@
                 <span class="mode-icon">⚡</span>
                 <div class="mode-info">
                   <h4>Predict the Output</h4>
-                  <p>Read random inputs and toggle DIFFERENCE/BORROW LEDs fast!</p>
+                  <p>Read random inputs and toggle SUM/CARRY LEDs fast!</p>
                 </div>
               </button>
               <button id="btn-mode-table" class="mode-select-btn">
@@ -2056,11 +2042,11 @@
               
               <div class="predict-layout grid-split-equal">
                 <div class="circuit-stimulus">
-                  <div class="gate-type-badge" id="predict-gate-type">HALF SUBTRACTOR</div>
+                  <div class="gate-type-badge" id="predict-gate-type">HALF ADDER</div>
                   <div class="stimulus-inputs">
                     <div class="stimulus-bit">Input A: <span id="predict-val-a" class="bit-text">1</span></div>
                     <div class="stimulus-bit">Input B: <span id="predict-val-b" class="bit-text">0</span></div>
-                    <div class="stimulus-bit" id="predict-bin-row">Input B<sub>in</sub>: <span id="predict-val-bin" class="bit-text">0</span></div>
+                    <div class="stimulus-bit" id="predict-cin-row">Input C<sub>in</sub>: <span id="predict-val-cin" class="bit-text">0</span></div>
                   </div>
                 </div>
 
@@ -2068,12 +2054,12 @@
                   <div class="predict-led-box">
                     <button class="predict-led-btn" id="btn-predict-s">
                       <span class="led-lens" id="predict-lens-s"></span>
-                      <span class="led-txt">DIFFERENCE (D)</span>
+                      <span class="led-txt">SUM (S)</span>
                       <span id="predict-val-s-lbl" class="btn-val">0</span>
                     </button>
                     <button class="predict-led-btn" id="btn-predict-c">
                       <span class="led-lens" id="predict-lens-c"></span>
-                      <span class="led-txt">BORROW (C)</span>
+                      <span class="led-txt">CARRY (C)</span>
                       <span id="predict-val-c-lbl" class="btn-val">0</span>
                     </button>
                   </div>
@@ -2116,7 +2102,7 @@
 
               <div class="timed-question-container">
                 <div class="timed-question">
-                  <span id="timed-expr-a">1</span> + <span id="timed-expr-b">1</span> + <span id="timed-expr-bin">0</span>
+                  <span id="timed-expr-a">1</span> + <span id="timed-expr-b">1</span> + <span id="timed-expr-cin">0</span>
                 </div>
                 <div class="timed-choices grid-split-equal">
                   <button class="choice-btn" data-s="0" data-c="0">S=0, C=0</button>
@@ -2155,17 +2141,17 @@
             <div class="mastery-badges grid-cards-auto" style="--card-min-width: 130px;">
               <div class="badge-item locked" id="badge-intro">
                 <span class="badge-icon">💡</span>
-                <span class="badge-title">Borrow Explorer</span>
+                <span class="badge-title">Carry Explorer</span>
                 <span class="badge-desc">Complete Module 1</span>
               </div>
               <div class="badge-item locked" id="badge-half">
                 <span class="badge-icon">⚡</span>
-                <span class="badge-title">Half Subtractor Master</span>
+                <span class="badge-title">Half Adder Master</span>
                 <span class="badge-desc">Complete Module 2</span>
               </div>
               <div class="badge-item locked" id="badge-full">
                 <span class="badge-icon">🎛️</span>
-                <span class="badge-title">Full Subtractor Architect</span>
+                <span class="badge-title">Full Adder Architect</span>
                 <span class="badge-desc">Complete Module 3</span>
               </div>
               <div class="badge-item locked" id="badge-sandbox">
