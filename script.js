@@ -2,7 +2,7 @@
 // DATABASE CONFIGURATION (FOR TEACHERS)
 // ============================================================
 // Paste your Google Sheets Web App URL here to hardcode it for all students:
-const DEFAULT_DATABASE_URL = "https://script.google.com/macros/s/AKfycbzRzOOqds7hyxhwd4T7Bu35ZMYYFksLh_Ul9lDslRG7mqurmU1N62CqRqV1xTajErb-/exec";
+const DEFAULT_DATABASE_URL = "https://script.google.com/macros/s/AKfycbz_H4kP1QfE-9posjGJZIgSUnSboAIrGkp2JlkQ5bPYqAgBhYlucP4hrEc-GyEetNgy/exec";
 
 // Global App State
 const state = {
@@ -21,19 +21,19 @@ const state = {
   // Module 1 (Intro) inputs
   intro: { a: 0, b: 0 },
 
-  // Module 2 (Half Subtractor) inputs
-  halfSubtractor: { a: 0, b: 0 },
+  // Module 2 (Half Adder) inputs
+  halfAdder: { a: 0, b: 0 },
 
-  // Module 3 (Full Subtractor) inputs & views
-  fullSubtractor: { a: 0, b: 0, bin: 0, view: 'gates' },
+  // Module 3 (Full Adder) inputs & views
+  fullAdder: { a: 0, b: 0, cin: 0, view: 'gates' },
 
   // Module 4 (Sandbox) circuit editor data
   sandbox: {
     mission: 'ha', // 'ha' or 'fa'
     a: 0,
     b: 0,
-    bin: 0,
-    outputs: { difference: 0, borrow: 0 },
+    cin: 0,
+    outputs: { sum: 0, carry: 0 },
     gates: [],     // { id, type, x, y, inputs: [{v, wireId}, {v, wireId}], output: {v, wireIds: []} }
     selectedPaletteType: null,
     wires: [],     // { id, fromNode: {type, id, pinIndex}, toNode: {type, id, pinIndex} }
@@ -45,7 +45,7 @@ const state = {
     mousePos: { x: 0, y: 0 }
   },
 
-  // Module 5 (Ripple Borrow) data
+  // Module 5 (Ripple Carry) data
   ripple: {
     a: [0, 0, 0, 0], // MSB -> LSB [A3, A2, A1, A0]
     b: [0, 0, 0, 0], // MSB -> LSB
@@ -55,12 +55,12 @@ const state = {
   },
 
   // Module 6 (Breadboard) data
-  breadboard: { a: 0, b: 0, bin: 0, view: 'ha' },
+  breadboard: { a: 0, b: 0, cin: 0, view: 'ha' },
 
   // Module 4 (K-Map Lab) data
   kmap: {
     view: 'ha',
-    target: 'difference',
+    target: 'sum',
     mode: 'guided',
     selection: [],
     groups: [],
@@ -76,7 +76,7 @@ const state = {
     highScore: 0,
     streak: 0,
     predict: {
-      a: 0, b: 0, bin: 0, isFull: false,
+      a: 0, b: 0, cin: 0, isFull: false,
       selectedS: 0, selectedC: 0,
       answered: false
     },
@@ -308,10 +308,10 @@ function updateMasteryStats() {
   // Unlock badges on mastery screen
   const badges = [
     { id: 'badge-intro', unlocked: state.completedModules.has('module-intro') },
-    { id: 'badge-half', unlocked: state.completedModules.has('module-half-subtractor') },
-    { id: 'badge-full', unlocked: state.completedModules.has('module-full-subtractor') },
+    { id: 'badge-half', unlocked: state.completedModules.has('module-half-adder') },
+    { id: 'badge-full', unlocked: state.completedModules.has('module-full-adder') },
     { id: 'badge-sandbox', unlocked: state.completedModules.has('module-sandbox') },
-    { id: 'badge-ripple', unlocked: state.completedModules.has('module-ripple-borrow') },
+    { id: 'badge-ripple', unlocked: state.completedModules.has('module-ripple-carry') },
     { id: 'badge-breadboard', unlocked: state.completedModules.has('module-breadboard') },
     { id: 'badge-arcade', unlocked: state.arcade.highScore >= 150 }
   ];
@@ -406,36 +406,32 @@ function initIntroModule() {
   const toggleB = document.getElementById('intro-bit-b');
 
   function updateIntro() {
-    const a = state.intro.a;
-    const b = state.intro.b;
-    const binS = a ^ b;
-    const binC = (!a && b) ? 1 : 0;
-    const decVal = a - b;
+    const sum = state.intro.a + state.intro.b;
+    const binS = sum & 1;
+    const binC = (sum >> 1) & 1;
 
     // Binary elements
-    document.getElementById('binary-borrow-val').innerText = binC;
-    document.getElementById('binary-borrow-val').className = `bit-box borrow-bit ${binC ? 'active' : ''}`;
+    document.getElementById('binary-carry-val').innerText = binC;
+    document.getElementById('binary-carry-val').className = `bit-box carry-bit ${binC ? 'active' : ''}`;
     
     document.getElementById('binary-res-s').innerText = binS;
     document.getElementById('binary-res-s').className = `bit-box ${binS ? 'active' : ''}`;
     document.getElementById('binary-res-c').innerText = binC;
-    document.getElementById('binary-res-c').className = `bit-box active-borrow ${binC ? 'active' : ''}`;
+    document.getElementById('binary-res-c').className = `bit-box active-carry ${binC ? 'active' : ''}`;
 
     // Decimal elements
-    document.getElementById('dec-a').innerText = a;
-    document.getElementById('dec-b').innerText = b;
-    document.getElementById('dec-difference').innerText = decVal;
+    document.getElementById('dec-a').innerText = state.intro.a;
+    document.getElementById('dec-b').innerText = state.intro.b;
+    document.getElementById('dec-sum').innerText = sum;
 
     // Explanations
     let desc = "";
-    if (a === 0 && b === 0) {
-      desc = "Both inputs are 0. Difference is 0, no borrow generated.";
-    } else if (a === 1 && b === 0) {
-      desc = "Minuend A is 1 and Subtrahend B is 0. 1 - 0 = 1. Difference is 1, no borrow generated.";
-    } else if (a === 1 && b === 1) {
-      desc = "Both inputs are 1. 1 - 1 = 0. Difference is 0, no borrow generated.";
+    if (state.intro.a === 0 && state.intro.b === 0) {
+      desc = "Both inputs are 0. No carry is generated. Output is 0.";
+    } else if (state.intro.a !== state.intro.b) {
+      desc = "One input is 1. The result is 1. No carry needed.";
     } else {
-      desc = "Minuend A is 0 and Subtrahend B is 1. We must borrow from the next column! Difference is 1, Borrow is 1.";
+      desc = "Both inputs are 1! The sum is 2 (decimal). In binary, we write 0 in the current column and Carry a 1 to the next column: 10₂.";
       completeModule('module-intro');
     }
     document.getElementById('intro-explanation').innerText = desc;
@@ -462,16 +458,16 @@ function initIntroModule() {
   updateIntro();
 }
 
-// MODULE 2: HALF SUBTRACTOR LOGIC
-function initHalfSubtractorModule() {
-  const switchA = document.getElementById('hs-switch-a');
-  const switchB = document.getElementById('hs-switch-b');
+// MODULE 2: HALF ADDER LOGIC
+function initHalfAdderModule() {
+  const switchA = document.getElementById('ha-switch-a');
+  const switchB = document.getElementById('ha-switch-b');
 
-  function evaluateHalfSubtractor() {
-    const a = state.halfSubtractor.a;
-    const b = state.halfSubtractor.b;
-    const difference = a ^ b;
-    const borrow = (!a && b) ? 1 : 0;
+  function evaluateHalfAdder() {
+    const a = state.halfAdder.a;
+    const b = state.halfAdder.b;
+    const sum = a ^ b;
+    const carry = a & b;
 
     // Visual switches update
     switchA.innerText = a;
@@ -480,35 +476,32 @@ function initHalfSubtractorModule() {
     switchB.classList.toggle('active', b === 1);
 
     // Wire path signals
-    setWireState('hs-wire-a-xor', a);
-    setWireState('hs-wire-a-and', a);
-    setWireState('hs-wire-b-xor', b);
-    setWireState('hs-wire-b-and', b);
-    setWireState('hs-wire-xor-difference', difference);
-    setWireState('hs-wire-and-borrow', borrow);
+    setWireState('ha-wire-a-xor', a);
+    setWireState('ha-wire-a-and', a);
+    setWireState('ha-wire-b-xor', b);
+    setWireState('ha-wire-b-and', b);
+    setWireState('ha-wire-xor-sum', sum);
+    setWireState('ha-wire-and-carry', carry);
 
     // Pulse animation flow
-    setPulseState('hs-pulse-a-xor', a, 'active-input');
-    setPulseState('hs-pulse-a-and', a, 'active-input');
-    setPulseState('hs-pulse-b-xor', b, 'active-input');
-    setPulseState('hs-pulse-b-and', b, 'active-input');
-    setPulseState('hs-pulse-xor-difference', difference, 'active-difference');
-    setPulseState('hs-pulse-and-borrow', borrow, 'active-borrow');
+    setPulseState('ha-pulse-a-xor', a, 'active-input');
+    setPulseState('ha-pulse-a-and', a, 'active-input');
+    setPulseState('ha-pulse-b-xor', b, 'active-input');
+    setPulseState('ha-pulse-b-and', b, 'active-input');
+    setPulseState('ha-pulse-xor-sum', sum, 'active-sum');
+    setPulseState('ha-pulse-and-carry', carry, 'active-carry');
 
     // Gate Active styles
-    document.getElementById('hs-xor-gate').classList.toggle('active', (a || b) && !(a && b));
-    document.getElementById('hs-and-gate').classList.toggle('active', !a && b);
-    
-    // Set NOT wire state
-    setWireState('hs-wire-a-and-not', !a);
+    document.getElementById('ha-xor-gate').classList.toggle('active', (a || b) && !(a && b));
+    document.getElementById('ha-and-gate').classList.toggle('active', a && b);
 
     // LEDs
-    document.getElementById('hs-led-difference').classList.toggle('active', difference === 1);
-    document.getElementById('hs-led-borrow').classList.toggle('active', borrow === 1);
+    document.getElementById('ha-led-sum').classList.toggle('active', sum === 1);
+    document.getElementById('ha-led-carry').classList.toggle('active', carry === 1);
 
     // Truth Table highlight
     const rowKey = `${a}${b}`;
-    const tableRows = document.querySelectorAll('#hs-truth-table tbody tr');
+    const tableRows = document.querySelectorAll('#ha-truth-table tbody tr');
     tableRows.forEach(row => {
       if (row.getAttribute('data-inputs') === rowKey) {
         row.classList.add('active-row');
@@ -519,25 +512,25 @@ function initHalfSubtractorModule() {
 
     // Solve condition check
     if (a === 1 && b === 1) {
-      completeModule('module-half-subtractor');
+      completeModule('module-half-adder');
     }
   }
 
   switchA.addEventListener('click', () => {
     logClick();
-    state.halfSubtractor.a = state.halfSubtractor.a ? 0 : 1;
+    state.halfAdder.a = state.halfAdder.a ? 0 : 1;
     playSound('click');
-    evaluateHalfSubtractor();
+    evaluateHalfAdder();
   });
 
   switchB.addEventListener('click', () => {
     logClick();
-    state.halfSubtractor.b = state.halfSubtractor.b ? 0 : 1;
+    state.halfAdder.b = state.halfAdder.b ? 0 : 1;
     playSound('click');
-    evaluateHalfSubtractor();
+    evaluateHalfAdder();
   });
 
-  evaluateHalfSubtractor();
+  evaluateHalfAdder();
 }
 
 // Utility SVG Wire Manipulation Helpers
@@ -556,41 +549,41 @@ function setPulseState(id, active, activeClass) {
       el.classList.add(activeClass);
     } else {
       el.classList.add('hidden');
-      el.classList.remove('active-input', 'active-difference', 'active-borrow');
+      el.classList.remove('active-input', 'active-sum', 'active-carry');
     }
   }
 }
 
-// MODULE 3: FULL SUBTRACTOR LOGIC
-function initFullSubtractorModule() {
-  const swA = document.getElementById('fs-switch-a');
-  const swB = document.getElementById('fs-switch-b');
-  const swCin = document.getElementById('fs-switch-bin');
+// MODULE 3: FULL ADDER LOGIC
+function initFullAdderModule() {
+  const swA = document.getElementById('fa-switch-a');
+  const swB = document.getElementById('fa-switch-b');
+  const swCin = document.getElementById('fa-switch-cin');
   
-  const blockSwA = document.getElementById('fs-block-switch-a');
-  const blockSwB = document.getElementById('fs-block-switch-b');
-  const blockSwCin = document.getElementById('fs-block-switch-bin');
+  const blockSwA = document.getElementById('fa-block-switch-a');
+  const blockSwB = document.getElementById('fa-block-switch-b');
+  const blockSwCin = document.getElementById('fa-block-switch-cin');
 
-  const btnViewGates = document.getElementById('btn-fs-view-gates');
-  const btnViewBlocks = document.getElementById('btn-fs-view-blocks');
-  const faGateSvg = document.getElementById('fs-gate-svg');
-  const faBlockSvg = document.getElementById('fs-block-svg');
+  const btnViewGates = document.getElementById('btn-fa-view-gates');
+  const btnViewBlocks = document.getElementById('btn-fa-view-blocks');
+  const faGateSvg = document.getElementById('fa-gate-svg');
+  const faBlockSvg = document.getElementById('fa-block-svg');
 
-  function evaluateFullSubtractor() {
-    const a = state.fullSubtractor.a;
-    const b = state.fullSubtractor.b;
-    const bin = state.fullSubtractor.bin;
+  function evaluateFullAdder() {
+    const a = state.fullAdder.a;
+    const b = state.fullAdder.b;
+    const cin = state.fullAdder.cin;
 
-    const difference = a ^ b ^ bin;
+    const sum = a ^ b ^ cin;
     const xor1_out = a ^ b;
-    const and1_out = (!a && b) ? 1 : 0;
-    const and2_out = (bin && !xor1_out) ? 1 : 0;
-    const bout = and1_out | and2_out;
+    const and1_out = a & b;
+    const and2_out = cin & xor1_out;
+    const cout = and1_out | and2_out;
 
     // Switch text update
     swA.innerText = a; swA.classList.toggle('active', a === 1);
     swB.innerText = b; swB.classList.toggle('active', b === 1);
-    swCin.innerText = bin; swCin.classList.toggle('active', bin === 1);
+    swCin.innerText = cin; swCin.classList.toggle('active', cin === 1);
 
     if (blockSwA) {
       blockSwA.innerText = a; blockSwA.classList.toggle('active', a === 1);
@@ -599,82 +592,78 @@ function initFullSubtractorModule() {
       blockSwB.innerText = b; blockSwB.classList.toggle('active', b === 1);
     }
     if (blockSwCin) {
-      blockSwCin.innerText = bin; blockSwCin.classList.toggle('active', bin === 1);
+      blockSwCin.innerText = cin; blockSwCin.classList.toggle('active', cin === 1);
     }
 
     // GATE VIEW WIRE signals
-    setWireState('fs-w-a-xor1', a);
-    setWireState('fs-w-a-and1', a);
-    setWireState('fs-w-b-xor1', b);
-    setWireState('fs-w-b-and1', b);
-    setWireState('fs-w-bin-xor2', bin);
-    setWireState('fs-w-bin-and2', bin);
-    setWireState('fs-w-xor1-xor2', xor1_out);
-    setWireState('fs-w-xor1-and2', xor1_out);
-    setWireState('fs-w-and1-or', and1_out);
-    setWireState('fs-w-and2-or', and2_out);
-    setWireState('fs-w-xor2-difference', difference);
-    setWireState('fs-w-or-borrow', bout);
+    setWireState('fa-w-a-xor1', a);
+    setWireState('fa-w-a-and1', a);
+    setWireState('fa-w-b-xor1', b);
+    setWireState('fa-w-b-and1', b);
+    setWireState('fa-w-cin-xor2', cin);
+    setWireState('fa-w-cin-and2', cin);
+    setWireState('fa-w-xor1-xor2', xor1_out);
+    setWireState('fa-w-xor1-and2', xor1_out);
+    setWireState('fa-w-and1-or', and1_out);
+    setWireState('fa-w-and2-or', and2_out);
+    setWireState('fa-w-xor2-sum', sum);
+    setWireState('fa-w-or-carry', cout);
 
     // GATE VIEW Pulse flow
-    setPulseState('fs-p-a-xor1', a, 'active-input');
-    setPulseState('fs-p-a-and1', a, 'active-input');
-    setPulseState('fs-p-b-xor1', b, 'active-input');
-    setPulseState('fs-p-b-and1', b, 'active-input');
-    setPulseState('fs-p-bin-xor2', bin, 'active-input');
-    setPulseState('fs-p-bin-and2', bin, 'active-input');
-    setPulseState('fs-p-xor1-xor2', xor1_out, 'active-input');
-    setPulseState('fs-p-xor1-and2', xor1_out, 'active-input');
-    setPulseState('fs-p-and1-or', and1_out, 'active-input');
-    setPulseState('fs-p-and2-or', and2_out, 'active-input');
-    setPulseState('fs-p-xor2-difference', difference, 'active-difference');
-    setPulseState('fs-p-or-borrow', bout, 'active-borrow');
+    setPulseState('fa-p-a-xor1', a, 'active-input');
+    setPulseState('fa-p-a-and1', a, 'active-input');
+    setPulseState('fa-p-b-xor1', b, 'active-input');
+    setPulseState('fa-p-b-and1', b, 'active-input');
+    setPulseState('fa-p-cin-xor2', cin, 'active-input');
+    setPulseState('fa-p-cin-and2', cin, 'active-input');
+    setPulseState('fa-p-xor1-xor2', xor1_out, 'active-input');
+    setPulseState('fa-p-xor1-and2', xor1_out, 'active-input');
+    setPulseState('fa-p-and1-or', and1_out, 'active-input');
+    setPulseState('fa-p-and2-or', and2_out, 'active-input');
+    setPulseState('fa-p-xor2-sum', sum, 'active-sum');
+    setPulseState('fa-p-or-carry', cout, 'active-carry');
 
     // BLOCK VIEW WIRE signals
-    setWireState('fs-wb-a', a);
-    setWireState('fs-wb-b', b);
-    setWireState('fs-wb-bin', bin);
-    setWireState('fs-wb-ha1s', xor1_out);
-    setWireState('fs-wb-ha1c', and1_out);
-    setWireState('fs-wb-ha2c', and2_out);
-    setWireState('fs-wb-difference', difference);
-    setWireState('fs-wb-borrow', bout);
+    setWireState('fa-wb-a', a);
+    setWireState('fa-wb-b', b);
+    setWireState('fa-wb-cin', cin);
+    setWireState('fa-wb-ha1s', xor1_out);
+    setWireState('fa-wb-ha1c', and1_out);
+    setWireState('fa-wb-ha2c', and2_out);
+    setWireState('fa-wb-sum', sum);
+    setWireState('fa-wb-carry', cout);
 
     // BLOCK VIEW Pulse flow
-    setPulseState('fs-pb-a', a, 'active-input');
-    setPulseState('fs-pb-b', b, 'active-input');
-    setPulseState('fs-pb-bin', bin, 'active-input');
-    setPulseState('fs-pb-ha1s', xor1_out, 'active-input');
-    setPulseState('fs-pb-ha1c', and1_out, 'active-input');
-    setPulseState('fs-pb-ha2c', and2_out, 'active-input');
-    setPulseState('fs-pb-difference', difference, 'active-difference');
-    setPulseState('fs-pb-borrow', bout, 'active-borrow');
+    setPulseState('fa-pb-a', a, 'active-input');
+    setPulseState('fa-pb-b', b, 'active-input');
+    setPulseState('fa-pb-cin', cin, 'active-input');
+    setPulseState('fa-pb-ha1s', xor1_out, 'active-input');
+    setPulseState('fa-pb-ha1c', and1_out, 'active-input');
+    setPulseState('fa-pb-ha2c', and2_out, 'active-input');
+    setPulseState('fa-pb-sum', sum, 'active-sum');
+    setPulseState('fa-pb-carry', cout, 'active-carry');
 
     // Gate Active outlines
-    document.getElementById('fs-xor1').classList.toggle('active', xor1_out === 1);
-    document.getElementById('fs-and1').classList.toggle('active', and1_out === 1);
-    document.getElementById('fs-xor2').classList.toggle('active', difference === 1);
-    document.getElementById('fs-and2').classList.toggle('active', and2_out === 1);
-    document.getElementById('fs-or').classList.toggle('active', bout === 1);
-    
-    // Set NOT wire states
-    setWireState('fs-w-a-and1-not', !a);
-    setWireState('fs-w-xor1-and2-not', !xor1_out);
+    document.getElementById('fa-xor1').classList.toggle('active', xor1_out === 1);
+    document.getElementById('fa-and1').classList.toggle('active', and1_out === 1);
+    document.getElementById('fa-xor2').classList.toggle('active', sum === 1);
+    document.getElementById('fa-and2').classList.toggle('active', and2_out === 1);
+    document.getElementById('fa-or').classList.toggle('active', cout === 1);
 
     // Block visual active states
-    document.getElementById('fs-ha1-block').classList.toggle('active', a || b);
-    document.getElementById('fs-ha2-block').classList.toggle('active', xor1_out || bin);
-    document.getElementById('fs-block-or-gate').classList.toggle('active', bout === 1);
+    document.getElementById('fa-ha1-block').classList.toggle('active', a || b);
+    document.getElementById('fa-ha2-block').classList.toggle('active', xor1_out || cin);
+    document.getElementById('fa-block-or-gate').classList.toggle('active', cout === 1);
 
     // LEDs
-    document.getElementById('fs-led-difference').classList.toggle('active', difference === 1);
-    document.getElementById('fs-led-borrow').classList.toggle('active', bout === 1);
-    document.getElementById('fs-led-difference-block').classList.toggle('active', difference === 1);
-    document.getElementById('fs-led-borrow-block').classList.toggle('active', bout === 1);
+    document.getElementById('fa-led-sum').classList.toggle('active', sum === 1);
+    document.getElementById('fa-led-carry').classList.toggle('active', cout === 1);
+    document.getElementById('fa-led-sum-block').classList.toggle('active', sum === 1);
+    document.getElementById('fa-led-carry-block').classList.toggle('active', cout === 1);
 
     // Truth Table active row
-    const rowKey = `${a}${b}${bin}`;
-    const tableRows = document.querySelectorAll('#fs-truth-table tbody tr');
+    const rowKey = `${a}${b}${cin}`;
+    const tableRows = document.querySelectorAll('#fa-truth-table tbody tr');
     tableRows.forEach(row => {
       if (row.getAttribute('data-inputs') === rowKey) {
         row.classList.add('active-row');
@@ -683,16 +672,16 @@ function initFullSubtractorModule() {
       }
     });
 
-    // Check completion condition (all 3 inputs HIGH demonstrates all borrowing pathways)
-    if (a === 1 && b === 1 && bin === 1) {
-      completeModule('module-full-subtractor');
+    // Check completion condition (all 3 inputs HIGH demonstrates all carrying pathways)
+    if (a === 1 && b === 1 && cin === 1) {
+      completeModule('module-full-adder');
     }
   }
 
   // View switches
   btnViewGates.addEventListener('click', () => {
     logClick();
-    state.fullSubtractor.view = 'gates';
+    state.fullAdder.view = 'gates';
     btnViewGates.classList.add('active');
     btnViewBlocks.classList.remove('active');
     faGateSvg.classList.remove('hidden');
@@ -702,7 +691,7 @@ function initFullSubtractorModule() {
 
   btnViewBlocks.addEventListener('click', () => {
     logClick();
-    state.fullSubtractor.view = 'blocks';
+    state.fullAdder.view = 'blocks';
     btnViewBlocks.classList.add('active');
     btnViewGates.classList.remove('active');
     faBlockSvg.classList.remove('hidden');
@@ -713,32 +702,32 @@ function initFullSubtractorModule() {
   // Toggles
   const toggleA = () => {
     logClick();
-    state.fullSubtractor.a = state.fullSubtractor.a ? 0 : 1;
+    state.fullAdder.a = state.fullAdder.a ? 0 : 1;
     playSound('click');
-    evaluateFullSubtractor();
+    evaluateFullAdder();
   };
   swA.addEventListener('click', toggleA);
   if (blockSwA) blockSwA.addEventListener('click', toggleA);
 
   const toggleB = () => {
     logClick();
-    state.fullSubtractor.b = state.fullSubtractor.b ? 0 : 1;
+    state.fullAdder.b = state.fullAdder.b ? 0 : 1;
     playSound('click');
-    evaluateFullSubtractor();
+    evaluateFullAdder();
   };
   swB.addEventListener('click', toggleB);
   if (blockSwB) blockSwB.addEventListener('click', toggleB);
 
   const toggleCin = () => {
     logClick();
-    state.fullSubtractor.bin = state.fullSubtractor.bin ? 0 : 1;
+    state.fullAdder.cin = state.fullAdder.cin ? 0 : 1;
     playSound('click');
-    evaluateFullSubtractor();
+    evaluateFullAdder();
   };
   swCin.addEventListener('click', toggleCin);
   if (blockSwCin) blockSwCin.addEventListener('click', toggleCin);
 
-  evaluateFullSubtractor();
+  evaluateFullAdder();
 }
 
 // MODULE 4: DRAG AND DROP CIRCUIT SANDBOX ENGINE
@@ -782,8 +771,8 @@ function resetSandboxElements() {
   state.sandbox.selectedWire = null;
   state.sandbox.a = 0;
   state.sandbox.b = 0;
-  state.sandbox.bin = 0;
-  state.sandbox.outputs = { difference: 0, borrow: 0 };
+  state.sandbox.cin = 0;
+  state.sandbox.outputs = { sum: 0, carry: 0 };
   
   updateSandboxSidepanels();
   updateGraderStatus();
@@ -917,7 +906,7 @@ function evaluateSandboxCircuit() {
   // Recursively evaluate pin value
   function evaluatePin(pinType, componentId, pinIdx, visitedGates = new Set()) {
     if (pinType === 'input_port') {
-      const pinName = componentId; // 'a', 'b', or 'bin'
+      const pinName = componentId; // 'a', 'b', or 'cin'
       return state.sandbox[pinName] || 0;
     }
 
@@ -958,8 +947,8 @@ function evaluateSandboxCircuit() {
     return 0;
   }
 
-  // Evaluate the global outputs DIFFERENCE and BORROW
-  const outPins = ['difference', 'borrow'];
+  // Evaluate the global outputs SUM and CARRY
+  const outPins = ['sum', 'carry'];
   state.sandbox.outputs = {};
   
   outPins.forEach(p => {
@@ -984,11 +973,11 @@ function checkCircuitCorrectness() {
   // Temporary snapshot of current UI values to restore later
   const snapA = state.sandbox.a || 0;
   const snapB = state.sandbox.b || 0;
-  const snapCin = state.sandbox.bin || 0;
+  const snapCin = state.sandbox.cin || 0;
 
   // Topological gate solver inside checker
   function solveTemp(inA, inB, inCin) {
-    const tempInputs = { a: inA, b: inB, bin: inCin };
+    const tempInputs = { a: inA, b: inB, cin: inCin };
     const tempGateVals = {};
     
     function evalTempPin(type, id, idx, visited = new Set()) {
@@ -1018,7 +1007,7 @@ function checkCircuitCorrectness() {
     }
 
     const outResults = {};
-    ['difference', 'borrow'].forEach(p => {
+    ['sum', 'carry'].forEach(p => {
       const wire = state.sandbox.wires.find(w => w.toNode.type === 'output_port' && w.toNode.id === p);
       outResults[p] = wire ? evalTempPin(wire.fromNode.type, wire.fromNode.id, wire.fromNode.pinIndex) : 0;
     });
@@ -1030,26 +1019,26 @@ function checkCircuitCorrectness() {
   for (let i = 0; i < statesToTest; i++) {
     const a = (i >> 1) & 1;
     const b = i & 1;
-    const bin = isFA ? ((i >> 2) & 1) : 0;
+    const cin = isFA ? ((i >> 2) & 1) : 0;
 
     // Expected Output
-    const targetDiff = a ^ b ^ bin;
-    const targetBorrow = isFA ? (((!a && b) || (!(a ^ b) && bin)) ? 1 : 0) : ((!a && b) ? 1 : 0);
+    const targetSum = a ^ b ^ cin;
+    const targetCarry = isFA ? ((a & b) | (cin & (a ^ b))) : (a & b);
 
     // Actual sandbox output
-    const res = solveTemp(a, b, bin);
-    const correct = (res.difference === targetDiff && res.borrow === targetBorrow);
+    const res = solveTemp(a, b, cin);
+    const correct = (res.sum === targetSum && res.carry === targetCarry);
     
     if (correct) {
       correctMatches++;
     }
-    coverage.push({ correct, inputLabel: isFA ? `${bin}${a}${b}` : `${a}${b}` });
+    coverage.push({ correct, inputLabel: isFA ? `${cin}${a}${b}` : `${a}${b}` });
   }
 
   // Restore snapshots
   state.sandbox.a = snapA;
   state.sandbox.b = snapB;
-  state.sandbox.bin = snapCin;
+  state.sandbox.cin = snapCin;
 
   return {
     isCorrect: correctMatches === statesToTest,
@@ -1065,7 +1054,7 @@ function updateGraderStatus() {
   miniTable.innerHTML = '';
   
   if (state.sandbox.mission === 'fa') {
-    miniTable.className = 'mini-grid fs-cols';
+    miniTable.className = 'mini-grid fa-cols';
   } else {
     miniTable.className = 'mini-grid';
   }
@@ -1095,9 +1084,9 @@ function triggerSandboxSuccess() {
   const msg = document.getElementById('sandbox-success-msg');
   
   if (state.sandbox.mission === 'ha') {
-    msg.innerHTML = 'Your custom circuit successfully validates the <strong>Half Subtractor</strong> truth table. High five! ⚡';
+    msg.innerHTML = 'Your custom circuit successfully validates the <strong>Half Adder</strong> truth table. High five! ⚡';
   } else {
-    msg.innerHTML = 'Excellent! You have successfully built a full gate-level <strong>Full Subtractor</strong>. You are ready for high-speed ripple chains!';
+    msg.innerHTML = 'Excellent! You have successfully built a full gate-level <strong>Full Adder</strong>. You are ready for high-speed ripple chains!';
   }
 
   overlay.classList.remove('hidden');
@@ -1142,12 +1131,12 @@ function getPinPosition(type, id, pinIdx) {
     const x = 42;
     if (id === 'a') return { x, y: 120 };
     if (id === 'b') return { x, y: 240 };
-    if (id === 'bin') return { x, y: 360 };
+    if (id === 'cin') return { x, y: 360 };
   }
   if (type === 'output_port') {
     const x = 670;
-    if (id === 'difference') return { x, y: 180 };
-    if (id === 'borrow') return { x, y: 300 };
+    if (id === 'sum') return { x, y: 180 };
+    if (id === 'carry') return { x, y: 300 };
   }
   if (type === 'gate') {
     const gate = state.sandbox.gates.find(g => g.id === id);
@@ -1174,7 +1163,7 @@ function getPinAtPosition(pos) {
   let bestDist = Infinity;
 
   // 1. Check global inputs (larger tolerance since they are far apart)
-  const inputs = isFA ? ['a', 'b', 'bin'] : ['a', 'b'];
+  const inputs = isFA ? ['a', 'b', 'cin'] : ['a', 'b'];
   for (let inId of inputs) {
     const pinPos = getPinPosition('input_port', inId);
     const dist = Math.hypot(pos.x - pinPos.x, pos.y - pinPos.y);
@@ -1185,7 +1174,7 @@ function getPinAtPosition(pos) {
   }
 
   // 2. Check global outputs
-  const outputs = ['difference', 'borrow'];
+  const outputs = ['sum', 'carry'];
   for (let outId of outputs) {
     const pinPos = getPinPosition('output_port', outId);
     const dist = Math.hypot(pos.x - pinPos.x, pos.y - pinPos.y);
@@ -1265,7 +1254,7 @@ function onSandboxMouseDown(e) {
       state.sandbox.b = state.sandbox.b ? 0 : 1;
       toggled = true;
     } else if (isFA && Math.abs(pos.y - 360) <= 22) {
-      state.sandbox.bin = state.sandbox.bin ? 0 : 1;
+      state.sandbox.cin = state.sandbox.cin ? 0 : 1;
       toggled = true;
     }
     
@@ -1591,7 +1580,7 @@ function drawSandbox() {
 
   // Draw global input/output connector nodes
   const isFA = (state.sandbox.mission === 'fa');
-  const inNames = isFA ? ['a', 'b', 'bin'] : ['a', 'b'];
+  const inNames = isFA ? ['a', 'b', 'cin'] : ['a', 'b'];
   inNames.forEach(inId => {
     const pos = getPinPosition('input_port', inId);
     
@@ -1631,7 +1620,7 @@ function drawSandbox() {
     sandboxCtx.fillText(inId.toUpperCase(), boxX + boxW / 2, boxY - 7);
   });
 
-  const outNames = ['difference', 'borrow'];
+  const outNames = ['sum', 'carry'];
   outNames.forEach(outId => {
     const pos = getPinPosition('output_port', outId);
     
@@ -1802,7 +1791,7 @@ function initSandboxTools() {
     state.sandbox.mission = 'ha';
     missionHA.classList.add('active');
     missionFA.classList.remove('active');
-    document.getElementById('sandbox-goal-text').innerHTML = 'Construct a working <strong>Half Subtractor</strong>! Place gates on the grid and wire inputs to outputs. Complete the truth table to unlock.';
+    document.getElementById('sandbox-goal-text').innerHTML = 'Construct a working <strong>Half Adder</strong>! Place gates on the grid and wire inputs to outputs. Complete the truth table to unlock.';
     playSound('click');
     resetSandboxElements();
     updateSandboxSidepanels();
@@ -1814,7 +1803,7 @@ function initSandboxTools() {
     state.sandbox.mission = 'fa';
     missionFA.classList.add('active');
     missionHA.classList.remove('active');
-    document.getElementById('sandbox-goal-text').innerHTML = 'Construct a working <strong>Full Subtractor</strong>! Connect inputs A, B, and B<sub>in</sub> to DIFFERENCE and BORROW outputs.';
+    document.getElementById('sandbox-goal-text').innerHTML = 'Construct a working <strong>Full Adder</strong>! Connect inputs A, B, and C<sub>in</sub> to SUM and CARRY outputs.';
     playSound('click');
     resetSandboxElements();
     updateSandboxSidepanels();
@@ -1902,7 +1891,7 @@ function onSandboxFullscreenChange() {
   }
 }
 
-// MODULE 5: 4-BIT RIPPLE BORROW LAB
+// MODULE 5: 4-BIT RIPPLE CARRY LAB
 function initRippleCarryModule() {
   const speedEl = document.getElementById('ripple-speed');
   const btnRun = document.getElementById('btn-ripple-calculate');
@@ -1956,27 +1945,27 @@ function updateRippleStaticUI() {
 
   // Instantly resolve display if not animating
   if (!state.ripple.animating) {
-    const diffVal = decA + decB;
-    const binSum = diffVal.toString(2).padStart(5, '0');
+    const sumVal = decA + decB;
+    const binSum = sumVal.toString(2).padStart(5, '0');
     
-    document.getElementById('formula-bin-difference').innerText = `${binSum}₂`;
-    document.getElementById('formula-dec-difference').innerText = `(${diffVal})`;
+    document.getElementById('formula-bin-sum').innerText = `${binSum}₂`;
+    document.getElementById('formula-dec-sum').innerText = `(${sumVal})`;
     
     // LEDs matching LSB -> MSB
     const bits = binSum.split('').reverse(); // index 0 = S0
     for (let i = 0; i < 4; i++) {
       const bitVal = parseInt(bits[i] || '0');
-      document.getElementById(`rc-led-d${i}`).classList.toggle('active', bitVal === 1);
+      document.getElementById(`rc-led-s${i}`).classList.toggle('active', bitVal === 1);
     }
     
     // Overflow bit C4
     const ovVal = parseInt(bits[4] || '0');
-    document.getElementById('rc-led-b4').classList.toggle('active', ovVal === 1);
+    document.getElementById('rc-led-c4').classList.toggle('active', ovVal === 1);
     document.getElementById('ripple-overflow-alert').classList.toggle('hidden', ovVal === 0);
   }
 }
 
-// Scheduled delay animator for Ripple Borrow borrow-bits
+// Scheduled delay animator for Ripple Carry carry-bits
 function runRippleAnimation() {
   if (state.ripple.animating) return;
   state.ripple.animating = true;
@@ -1992,24 +1981,24 @@ function runRippleAnimation() {
 
   // Reset active wire highlights
   const wiresToReset = [
-    'rc-borrow-wire-0-1', 'rc-borrow-wire-1-2', 'rc-borrow-wire-2-3', 'rc-borrow-wire-3-ov',
+    'rc-carry-wire-0-1', 'rc-carry-wire-1-2', 'rc-carry-wire-2-3', 'rc-carry-wire-3-ov',
     'rc-s0-wire', 'rc-s1-wire', 'rc-s2-wire', 'rc-s3-wire'
   ];
   wiresToReset.forEach(wId => {
     document.getElementById(wId).classList.remove('active');
-    document.getElementById(wId).classList.remove('bin-active');
+    document.getElementById(wId).classList.remove('cin-active');
   });
 
   const pulsesToHide = [
-    'rc-borrow-pulse-0-1', 'rc-borrow-pulse-1-2', 'rc-borrow-pulse-2-3', 'rc-borrow-pulse-3-ov'
+    'rc-carry-pulse-0-1', 'rc-carry-pulse-1-2', 'rc-carry-pulse-2-3', 'rc-carry-pulse-3-ov'
   ];
   pulsesToHide.forEach(pId => document.getElementById(pId).classList.add('hidden'));
 
-  const ledsToReset = ['rc-led-d0', 'rc-led-d1', 'rc-led-d2', 'rc-led-d3', 'rc-led-b4'];
+  const ledsToReset = ['rc-led-s0', 'rc-led-s1', 'rc-led-s2', 'rc-led-s3', 'rc-led-c4'];
   ledsToReset.forEach(led => document.getElementById(led).classList.remove('active'));
 
   // Propagation execution scheduler
-  let currentBorrow = 0;
+  let currentCarry = 0;
   const A = [...state.ripple.a]; // A[0] is LSB
   const B = [...state.ripple.b]; // B[0] is LSB
 
@@ -2018,22 +2007,22 @@ function runRippleAnimation() {
   function processStage(stageIdx) {
     if (stageIdx > 3) {
       // Done propagation
-      const finalDiff = parseInt([...state.ripple.a].reverse().join(''), 2) + parseInt([...state.ripple.b].reverse().join(''), 2);
-      const binSum = finalDiff.toString(2).padStart(5, '0');
-      document.getElementById('formula-bin-difference').innerText = `${binSum}₂`;
-      document.getElementById('formula-dec-difference').innerText = `(${finalDiff})`;
+      const finalSum = parseInt([...state.ripple.a].reverse().join(''), 2) + parseInt([...state.ripple.b].reverse().join(''), 2);
+      const binSum = finalSum.toString(2).padStart(5, '0');
+      document.getElementById('formula-bin-sum').innerText = `${binSum}₂`;
+      document.getElementById('formula-dec-sum').innerText = `(${finalSum})`;
       
-      // Animate borrow-out/overflow path
-      if (currentBorrow === 1) {
-        document.getElementById('rc-borrow-wire-3-ov').classList.add('active');
-        document.getElementById('rc-borrow-pulse-3-ov').classList.remove('hidden');
-        document.getElementById('rc-led-b4').classList.add('active');
+      // Animate carry-out/overflow path
+      if (currentCarry === 1) {
+        document.getElementById('rc-carry-wire-3-ov').classList.add('active');
+        document.getElementById('rc-carry-pulse-3-ov').classList.remove('hidden');
+        document.getElementById('rc-led-c4').classList.add('active');
         document.getElementById('ripple-overflow-alert').classList.remove('hidden');
       }
 
       state.ripple.animating = false;
       document.getElementById('btn-ripple-calculate').disabled = false;
-      completeModule('module-ripple-borrow');
+      completeModule('module-ripple-carry');
       return;
     }
 
@@ -2041,35 +2030,35 @@ function runRippleAnimation() {
     document.getElementById(`rc-stage-${stageIdx}`).classList.add('active-stage');
     playSound('ripple');
 
-    // Calculate difference & borrow-out for this column
+    // Calculate sum & carry-out for this column
     const aVal = A[stageIdx];
     const bVal = B[stageIdx];
-    const diffOut = aVal ^ bVal ^ currentBorrow;
-    const nextBorrow = (aVal & bVal) | (currentBorrow & (aVal ^ bVal));
+    const sumOut = aVal ^ bVal ^ currentCarry;
+    const nextCarry = (aVal & bVal) | (currentCarry & (aVal ^ bVal));
 
-    // LED glow difference output node for this column
-    if (diffOut === 1) {
+    // LED glow sum output node for this column
+    if (sumOut === 1) {
       document.getElementById(`rc-s${stageIdx}-wire`).classList.add('active');
-      document.getElementById(`rc-led-d${stageIdx}`).classList.add('active');
+      document.getElementById(`rc-led-s${stageIdx}`).classList.add('active');
     }
 
-    // Schedule borrow-out wire glow & propagation to the next column
+    // Schedule carry-out wire glow & propagation to the next column
     if (stageIdx < 3) {
       const nextTimer = setTimeout(() => {
-        // Toggle borrow wire active color before calculation starts
-        if (nextBorrow === 1) {
-          document.getElementById(`rc-borrow-wire-${stageIdx}-${stageIdx+1}`).classList.add('bin-active');
-          document.getElementById(`rc-borrow-pulse-${stageIdx}-${stageIdx+1}`).classList.remove('hidden');
+        // Toggle carry wire active color before calculation starts
+        if (nextCarry === 1) {
+          document.getElementById(`rc-carry-wire-${stageIdx}-${stageIdx+1}`).classList.add('cin-active');
+          document.getElementById(`rc-carry-pulse-${stageIdx}-${stageIdx+1}`).classList.remove('hidden');
         }
         
-        currentBorrow = nextBorrow;
+        currentCarry = nextCarry;
         // Proceed recursively
         processStage(stageIdx + 1);
       }, delayStep);
       state.ripple.timeoutIds.push(nextTimer);
     } else {
-      // final stage borrow-out evaluation
-      currentBorrow = nextBorrow;
+      // final stage carry-out evaluation
+      currentCarry = nextCarry;
       const finalTimer = setTimeout(() => {
         processStage(4);
       }, delayStep);
@@ -2083,24 +2072,24 @@ function runRippleAnimation() {
 
 // MODULE 6: PHYSICAL BREADBOARD INTERACTIVITY
 function initBreadboardModule() {
-  const switchHaA = document.getElementById('bb-hs-switch-a-knob');
-  const switchHaB = document.getElementById('bb-hs-switch-b-knob');
-  const switchFaA = document.getElementById('bb-fs-switch-a-knob');
-  const switchFaB = document.getElementById('bb-fs-switch-b-knob');
-  const switchFaCin = document.getElementById('bb-fs-switch-bin-knob');
+  const switchHaA = document.getElementById('bb-ha-switch-a-knob');
+  const switchHaB = document.getElementById('bb-ha-switch-b-knob');
+  const switchFaA = document.getElementById('bb-fa-switch-a-knob');
+  const switchFaB = document.getElementById('bb-fa-switch-b-knob');
+  const switchFaCin = document.getElementById('bb-fa-switch-cin-knob');
   
   const btnA = document.getElementById('bb-btn-switch-a');
   const btnB = document.getElementById('bb-btn-switch-b');
-  const btnCin = document.getElementById('bb-btn-switch-bin');
+  const btnCin = document.getElementById('bb-btn-switch-cin');
 
   const btnViewHa = document.getElementById('btn-bb-view-ha');
   const btnViewFa = document.getElementById('btn-bb-view-fa');
-  const svgHa = document.getElementById('breadboard-hs-svg');
-  const svgFa = document.getElementById('breadboard-fs-svg');
+  const svgHa = document.getElementById('breadboard-ha-svg');
+  const svgFa = document.getElementById('breadboard-fa-svg');
   const bbLabTitle = document.getElementById('bb-lab-title');
   const bbInfoOr = document.getElementById('bb-info-or');
 
-  // Toggle view between Half Subtractor and Full Subtractor breadboards
+  // Toggle view between Half Adder and Full Adder breadboards
   btnViewHa.addEventListener('click', () => {
     logClick();
     playSound('click');
@@ -2111,7 +2100,7 @@ function initBreadboardModule() {
     svgFa.classList.add('hidden');
     btnCin.classList.add('hidden');
     bbInfoOr.classList.add('hidden');
-    bbLabTitle.innerText = "Breadboard Lab (Half Subtractor Mapping)";
+    bbLabTitle.innerText = "Breadboard Lab (Half Adder Mapping)";
     updateBreadboard();
   });
 
@@ -2125,14 +2114,14 @@ function initBreadboardModule() {
     svgFa.classList.remove('hidden');
     btnCin.classList.remove('hidden');
     bbInfoOr.classList.remove('hidden');
-    bbLabTitle.innerText = "Breadboard Lab (Full Subtractor Mapping)";
+    bbLabTitle.innerText = "Breadboard Lab (Full Adder Mapping)";
     updateBreadboard();
   });
 
   function updateBreadboard() {
     const a = state.breadboard.a;
     const b = state.breadboard.b;
-    const bin = state.breadboard.bin;
+    const cin = state.breadboard.cin;
     const view = state.breadboard.view;
 
     // Update button states
@@ -2144,33 +2133,33 @@ function initBreadboardModule() {
     btnB.classList.toggle('primary', b === 1);
     btnB.classList.toggle('secondary', b === 0);
 
-    btnCin.innerText = `Toggle Switch C_in (${bin})`;
-    btnCin.classList.toggle('primary', bin === 1);
-    btnCin.classList.toggle('secondary', bin === 0);
+    btnCin.innerText = `Toggle Switch C_in (${cin})`;
+    btnCin.classList.toggle('primary', cin === 1);
+    btnCin.classList.toggle('secondary', cin === 0);
 
     if (view === 'ha') {
-      const difference = a ^ b;
-      const borrow = a & b;
+      const sum = a ^ b;
+      const carry = a & b;
 
       // Switch knob displacements relative to center (0,0) inside translated group
       switchHaA.setAttribute('cy', a ? 5 : -5);
       switchHaB.setAttribute('cy', b ? 5 : -5);
 
       // Highlight active logic wires
-      document.getElementById('bb-hs-wire-a1').classList.toggle('active', a === 1);
-      document.getElementById('bb-hs-wire-a2').classList.toggle('active', a === 1);
-      document.getElementById('bb-hs-wire-b1').classList.toggle('active', b === 1);
-      document.getElementById('bb-hs-wire-b2').classList.toggle('active', b === 1);
-      document.getElementById('bb-hs-wire-difference').classList.toggle('active', difference === 1);
-      document.getElementById('bb-hs-wire-borrow').classList.toggle('active', borrow === 1);
+      document.getElementById('bb-ha-wire-a1').classList.toggle('active', a === 1);
+      document.getElementById('bb-ha-wire-a2').classList.toggle('active', a === 1);
+      document.getElementById('bb-ha-wire-b1').classList.toggle('active', b === 1);
+      document.getElementById('bb-ha-wire-b2').classList.toggle('active', b === 1);
+      document.getElementById('bb-ha-wire-sum').classList.toggle('active', sum === 1);
+      document.getElementById('bb-ha-wire-carry').classList.toggle('active', carry === 1);
 
       // LEDs
-      document.getElementById('bb-hs-led-difference').classList.toggle('active', difference === 1);
-      document.getElementById('bb-hs-led-borrow').classList.toggle('active', borrow === 1);
+      document.getElementById('bb-ha-led-sum').classList.toggle('active', sum === 1);
+      document.getElementById('bb-ha-led-carry').classList.toggle('active', carry === 1);
 
       // Chip glowing outlines
-      document.getElementById('ic-bb-hs-74ls86').classList.toggle('active', difference === 1);
-      document.getElementById('ic-bb-hs-74ls08').classList.toggle('active', borrow === 1);
+      document.getElementById('ic-bb-ha-74ls86').classList.toggle('active', sum === 1);
+      document.getElementById('ic-bb-ha-74ls08').classList.toggle('active', carry === 1);
 
       // HA completion condition: both switches on
       if (a === 1 && b === 1) {
@@ -2178,41 +2167,41 @@ function initBreadboardModule() {
       }
     } else {
       const xor1 = a ^ b;
-      const difference = xor1 ^ bin;
+      const sum = xor1 ^ cin;
       const and1 = a & b;
-      const and2 = xor1 & bin;
-      const borrow = and1 | and2;
+      const and2 = xor1 & cin;
+      const carry = and1 | and2;
 
       // Switch knob displacements relative to center (0,0) inside translated group
       switchFaA.setAttribute('cy', a ? 5 : -5);
       switchFaB.setAttribute('cy', b ? 5 : -5);
-      switchFaCin.setAttribute('cy', bin ? 5 : -5);
+      switchFaCin.setAttribute('cy', cin ? 5 : -5);
 
       // Highlight active logic wires
-      document.getElementById('bb-fs-wire-a1').classList.toggle('active', a === 1);
-      document.getElementById('bb-fs-wire-a2').classList.toggle('active', a === 1);
-      document.getElementById('bb-fs-wire-b1').classList.toggle('active', b === 1);
-      document.getElementById('bb-fs-wire-b2').classList.toggle('active', b === 1);
-      document.getElementById('bb-fs-wire-xor1-xor4').classList.toggle('active', xor1 === 1);
-      document.getElementById('bb-fs-wire-xor1-and4').classList.toggle('active', xor1 === 1);
-      document.getElementById('bb-fs-wire-cin1').classList.toggle('active', bin === 1);
-      document.getElementById('bb-fs-wire-cin2').classList.toggle('active', bin === 1);
-      document.getElementById('bb-fs-wire-difference').classList.toggle('active', difference === 1);
-      document.getElementById('bb-fs-wire-and1').classList.toggle('active', and1 === 1);
-      document.getElementById('bb-fs-wire-and2').classList.toggle('active', and2 === 1);
-      document.getElementById('bb-fs-wire-borrow').classList.toggle('active', borrow === 1);
+      document.getElementById('bb-fa-wire-a1').classList.toggle('active', a === 1);
+      document.getElementById('bb-fa-wire-a2').classList.toggle('active', a === 1);
+      document.getElementById('bb-fa-wire-b1').classList.toggle('active', b === 1);
+      document.getElementById('bb-fa-wire-b2').classList.toggle('active', b === 1);
+      document.getElementById('bb-fa-wire-xor1-xor4').classList.toggle('active', xor1 === 1);
+      document.getElementById('bb-fa-wire-xor1-and4').classList.toggle('active', xor1 === 1);
+      document.getElementById('bb-fa-wire-cin1').classList.toggle('active', cin === 1);
+      document.getElementById('bb-fa-wire-cin2').classList.toggle('active', cin === 1);
+      document.getElementById('bb-fa-wire-sum').classList.toggle('active', sum === 1);
+      document.getElementById('bb-fa-wire-and1').classList.toggle('active', and1 === 1);
+      document.getElementById('bb-fa-wire-and2').classList.toggle('active', and2 === 1);
+      document.getElementById('bb-fa-wire-carry').classList.toggle('active', carry === 1);
 
       // LEDs
-      document.getElementById('bb-fs-led-difference').classList.toggle('active', difference === 1);
-      document.getElementById('bb-fs-led-borrow').classList.toggle('active', borrow === 1);
+      document.getElementById('bb-fa-led-sum').classList.toggle('active', sum === 1);
+      document.getElementById('bb-fa-led-carry').classList.toggle('active', carry === 1);
 
       // Chip glowing outlines
-      document.getElementById('ic-bb-fs-74ls86').classList.toggle('active', xor1 === 1 || difference === 1);
-      document.getElementById('ic-bb-fs-74ls08').classList.toggle('active', and1 === 1 || and2 === 1);
-      document.getElementById('ic-bb-fs-74ls32').classList.toggle('active', borrow === 1);
+      document.getElementById('ic-bb-fa-74ls86').classList.toggle('active', xor1 === 1 || sum === 1);
+      document.getElementById('ic-bb-fa-74ls08').classList.toggle('active', and1 === 1 || and2 === 1);
+      document.getElementById('ic-bb-fa-74ls32').classList.toggle('active', carry === 1);
 
-      // FA completion condition: inputs a, b, bin = 1, 1, 1
-      if (a === 1 && b === 1 && bin === 1) {
+      // FA completion condition: inputs a, b, cin = 1, 1, 1
+      if (a === 1 && b === 1 && cin === 1) {
         completeModule('module-breadboard');
       }
     }
@@ -2234,7 +2223,7 @@ function initBreadboardModule() {
 
   const triggerToggleCin = () => {
     logClick();
-    state.breadboard.bin = state.breadboard.bin ? 0 : 1;
+    state.breadboard.cin = state.breadboard.cin ? 0 : 1;
     playSound('click');
     updateBreadboard();
   };
@@ -2259,10 +2248,10 @@ function initKMapModule() {
   const targetsHa = document.getElementById('kmap-targets-ha');
   const targetsFa = document.getElementById('kmap-targets-fa');
 
-  const btnTargetHaSum = document.getElementById('btn-kmap-target-hs-difference');
-  const btnTargetHaCarry = document.getElementById('btn-kmap-target-hs-borrow');
-  const btnTargetFaSum = document.getElementById('btn-kmap-target-fs-difference');
-  const btnTargetFaCarry = document.getElementById('btn-kmap-target-fs-borrow');
+  const btnTargetHaSum = document.getElementById('btn-kmap-target-ha-sum');
+  const btnTargetHaCarry = document.getElementById('btn-kmap-target-ha-carry');
+  const btnTargetFaSum = document.getElementById('btn-kmap-target-fa-sum');
+  const btnTargetFaCarry = document.getElementById('btn-kmap-target-fa-carry');
 
   const btnModeGuided = document.getElementById('btn-kmap-mode-guided');
   const btnModePractice = document.getElementById('btn-kmap-mode-practice');
@@ -2271,8 +2260,8 @@ function initKMapModule() {
   const btnClear = document.getElementById('btn-kmap-clear');
   const btnReset = document.getElementById('btn-kmap-reset');
 
-  const svgHa = document.getElementById('kmap-hs-svg');
-  const svgFa = document.getElementById('kmap-fs-svg');
+  const svgHa = document.getElementById('kmap-ha-svg');
+  const svgFa = document.getElementById('kmap-fa-svg');
   const overlayToggle = document.getElementById('kmap-circuit-overlay-toggle');
 
   // VIEW toggles
@@ -2286,7 +2275,7 @@ function initKMapModule() {
     targetsFa.classList.add('hidden');
     svgHa.classList.remove('hidden');
     svgFa.classList.add('hidden');
-    selectTarget('difference');
+    selectTarget('sum');
   });
 
   btnViewFa.addEventListener('click', () => {
@@ -2299,14 +2288,14 @@ function initKMapModule() {
     targetsFa.classList.remove('hidden');
     svgHa.classList.add('hidden');
     svgFa.classList.remove('hidden');
-    selectTarget('borrow');
+    selectTarget('carry');
   });
 
   // TARGET toggles
-  btnTargetHaSum.addEventListener('click', () => { selectTarget('difference'); });
-  btnTargetHaCarry.addEventListener('click', () => { selectTarget('borrow'); });
-  btnTargetFaSum.addEventListener('click', () => { selectTarget('difference'); });
-  btnTargetFaCarry.addEventListener('click', () => { selectTarget('borrow'); });
+  btnTargetHaSum.addEventListener('click', () => { selectTarget('sum'); });
+  btnTargetHaCarry.addEventListener('click', () => { selectTarget('carry'); });
+  btnTargetFaSum.addEventListener('click', () => { selectTarget('sum'); });
+  btnTargetFaCarry.addEventListener('click', () => { selectTarget('carry'); });
 
   function selectTarget(target) {
     logClick();
@@ -2314,17 +2303,17 @@ function initKMapModule() {
     state.kmap.target = target;
     
     // Toggle active state
-    btnTargetHaSum.classList.toggle('active', target === 'difference');
-    btnTargetHaCarry.classList.toggle('active', target === 'borrow');
-    btnTargetFaSum.classList.toggle('active', target === 'difference');
-    btnTargetFaCarry.classList.toggle('active', target === 'borrow');
+    btnTargetHaSum.classList.toggle('active', target === 'sum');
+    btnTargetHaCarry.classList.toggle('active', target === 'carry');
+    btnTargetFaSum.classList.toggle('active', target === 'sum');
+    btnTargetFaCarry.classList.toggle('active', target === 'carry');
 
     // Update FA title text dynamically
     if (state.kmap.view === 'fa') {
-      const titleEl = document.getElementById('kmap-fs-title');
+      const titleEl = document.getElementById('kmap-fa-title');
       if (titleEl) {
-        titleEl.textContent = target === 'difference' ? "DIFFERENCE (S) K-Map" : "BORROW (Bout) K-Map";
-        titleEl.setAttribute('fill', target === 'difference' ? 'var(--accent-cyan)' : 'var(--accent-amber)');
+        titleEl.textContent = target === 'sum' ? "SUM (S) K-Map" : "CARRY (Cout) K-Map";
+        titleEl.setAttribute('fill', target === 'sum' ? 'var(--accent-cyan)' : 'var(--accent-amber)');
       }
     }
 
@@ -2401,17 +2390,17 @@ function getCellValue(r, c) {
   const view = state.kmap.view;
   const target = state.kmap.target;
   if (view === 'ha') {
-    if (target === 'difference') {
+    if (target === 'sum') {
       return (r === 0 && c === 1) || (r === 1 && c === 0) ? 1 : 0;
     } else {
-      return (r === 0 && c === 1) ? 1 : 0;
+      return (r === 1 && c === 1) ? 1 : 0;
     }
   } else {
     // Horizontal FA (Rows A: 0, 1; Columns BCin: 00=0, 01=1, 11=2, 10=3)
-    if (target === 'difference') {
+    if (target === 'sum') {
       return (r === 0 && (c === 1 || c === 3)) || (r === 1 && (c === 0 || c === 2)) ? 1 : 0;
     } else {
-      return (r === 0 && (c === 1 || c === 2 || c === 3)) || (r === 1 && c === 2) ? 1 : 0;
+      return (r === 0 && c === 2) || (r === 1 && (c === 1 || c === 2 || c === 3)) ? 1 : 0;
     }
   }
 }
@@ -2533,19 +2522,15 @@ function getTermForGroup(cells) {
       const c = cells[0].c;
       const termA = c === 1 ? "A" : "A'";
       const termB = r === 1 ? "B" : "B'";
-      if (view === 'ha' && target === 'borrow') {
-        // Half Subtractor Borrow is A'B (r=0, c=1)
-        return "A'·B";
-      }
       return `${termA}·${termB}`;
     }
   } else {
-    // Horizontal Full Subtractor (Rows A: 0, 1; Columns BCin: 00=0, 01=1, 11=2, 10=3)
+    // Horizontal Full Adder (Rows A: 0, 1; Columns BCin: 00=0, 01=1, 11=2, 10=3)
     const colBCin = [
-      {b: 0, bin: 0},
-      {b: 0, bin: 1},
-      {b: 1, bin: 1},
-      {b: 1, bin: 0}
+      {b: 0, cin: 0},
+      {b: 0, cin: 1},
+      {b: 1, cin: 1},
+      {b: 1, cin: 0}
     ];
 
     if (cells.length === 1) {
@@ -2554,7 +2539,7 @@ function getTermForGroup(cells) {
       const termA = r === 1 ? "A" : "A'";
       const bc = colBCin[c];
       const termB = bc.b === 1 ? "B" : "B'";
-      const termCin = bc.bin === 1 ? "Bin" : "Bin'";
+      const termCin = bc.cin === 1 ? "Cin" : "Cin'";
       return `${termA}·${termB}·${termCin}`;
     }
 
@@ -2563,13 +2548,13 @@ function getTermForGroup(cells) {
       const r2 = cells[1].r, c2 = cells[1].c;
 
       if (c1 === c2) {
-        // Vertical: same column -> A is eliminated, B and Bin remain
+        // Vertical: same column -> A is eliminated, B and Cin remain
         const bc = colBCin[c1];
         const termB = bc.b === 1 ? "B" : "B'";
-        const termCin = bc.bin === 1 ? "Bin" : "Bin'";
+        const termCin = bc.cin === 1 ? "Cin" : "Cin'";
         return `${termB}·${termCin}`;
       } else {
-        // Horizontal: same row -> A remains, one of B or Bin is eliminated
+        // Horizontal: same row -> A remains, one of B or Cin is eliminated
         const termA = r1 === 1 ? "A" : "A'";
         const bc1 = colBCin[c1];
         const bc2 = colBCin[c2];
@@ -2577,7 +2562,7 @@ function getTermForGroup(cells) {
           const termB = bc1.b === 1 ? "B" : "B'";
           return `${termA}·${termB}`;
         } else {
-          const termCin = bc1.bin === 1 ? "Bin" : "Bin'";
+          const termCin = bc1.cin === 1 ? "Cin" : "Cin'";
           return `${termA}·${termCin}`;
         }
       }
@@ -2588,18 +2573,18 @@ function getTermForGroup(cells) {
       const rows = Array.from(new Set(cells.map(c=>c.r)));
 
       if (cols.length === 4) {
-        // Full row: B and Bin are eliminated, A remains
+        // Full row: B and Cin are eliminated, A remains
         return rows[0] === 1 ? "A" : "A'";
       }
 
       if (rows.length === 2 && cols.length === 2) {
-        // 2x2 block: A is eliminated, one of B or Bin is constant
+        // 2x2 block: A is eliminated, one of B or Cin is constant
         const bc1 = colBCin[cols[0]];
         const bc2 = colBCin[cols[1]];
         if (bc1.b === bc2.b) {
           return bc1.b === 1 ? "B" : "B'";
         } else {
-          return bc1.bin === 1 ? "Bin" : "Bin'";
+          return bc1.cin === 1 ? "Cin" : "Cin'";
         }
       }
     }
@@ -2614,8 +2599,8 @@ function drawGroupLoop(cells, colorIndex) {
   const view = state.kmap.view;
   const target = state.kmap.target;
   const targetLoopsContainerId = view === 'ha' 
-    ? (target === 'difference' ? 'kmap-hs-difference-loops' : 'kmap-hs-borrow-loops')
-    : 'kmap-fs-loops';
+    ? (target === 'sum' ? 'kmap-ha-sum-loops' : 'kmap-ha-carry-loops')
+    : 'kmap-fa-loops';
   
   const container = document.getElementById(targetLoopsContainerId);
   if (!container) return;
@@ -2709,7 +2694,7 @@ function checkGuidedStep(selection, term) {
   const step = state.kmap.guidedStep;
 
   if (view === 'ha') {
-    if (target === 'borrow') {
+    if (target === 'carry') {
       if (selection.length === 1 && selection[0].r === 1 && selection[0].c === 1) {
         showKMapAlert("Correct! You grouped the cell (A=1, B=1).", true);
         triggerKMapFlash('flash-correct');
@@ -2740,22 +2725,22 @@ function checkGuidedStep(selection, term) {
       return false;
     }
   } else {
-    // Full Subtractor
-    if (target === 'borrow') {
+    // Full Adder
+    if (target === 'carry') {
       const isAB = selection.length === 2 && 
-                   selection.some(s => s.r === 0 && s.c === 2) && 
-                   selection.some(s => s.r === 0 && s.c === 3); // A'B
+                   selection.some(s => s.r === 1 && s.c === 2) && 
+                   selection.some(s => s.r === 1 && s.c === 3);
                    
       const isBCin = selection.length === 2 && 
                      selection.some(s => s.r === 0 && s.c === 2) && 
-                     selection.some(s => s.r === 1 && s.c === 2); // B Bin
+                     selection.some(s => s.r === 1 && s.c === 2);
                      
       const isACin = selection.length === 2 && 
-                     selection.some(s => s.r === 0 && s.c === 1) && 
-                     selection.some(s => s.r === 0 && s.c === 2); // A'Bin
+                     selection.some(s => s.r === 1 && s.c === 1) && 
+                     selection.some(s => s.r === 1 && s.c === 2);
 
       if (isAB) {
-        const already = state.kmap.groups.some(g => g.term === "A'·B");
+        const already = state.kmap.groups.some(g => g.term === "A·B");
         if (already) {
           showKMapAlert("You already grouped the A·B loop!", false);
           return false;
@@ -2764,29 +2749,29 @@ function checkGuidedStep(selection, term) {
         triggerKMapFlash('flash-correct');
         return true;
       } else if (isBCin) {
-        const already = state.kmap.groups.some(g => g.term === "B·Bin");
+        const already = state.kmap.groups.some(g => g.term === "B·Cin");
         if (already) {
-          showKMapAlert("You already grouped the B·Bin loop!", false);
+          showKMapAlert("You already grouped the B·Cin loop!", false);
           return false;
         }
-        showKMapAlert("Correct! You found the loop representing B·Bin.", true);
+        showKMapAlert("Correct! You found the loop representing B·Cin.", true);
         triggerKMapFlash('flash-correct');
         return true;
       } else if (isACin) {
-        const already = state.kmap.groups.some(g => g.term === "A·Bin");
+        const already = state.kmap.groups.some(g => g.term === "A·Cin");
         if (already) {
-          showKMapAlert("You already grouped the A·Bin loop!", false);
+          showKMapAlert("You already grouped the A·Cin loop!", false);
           return false;
         }
-        showKMapAlert("Correct! You found the loop representing A·Bin.", true);
+        showKMapAlert("Correct! You found the loop representing A·Cin.", true);
         triggerKMapFlash('flash-correct');
         return true;
       } else {
-        showKMapAlert("Invalid selection. Try to find one of the three 2-cell adjacent loops (representing A'B, B Bin, or A'Bin).", false);
+        showKMapAlert("Invalid selection. Try to find one of the three 2-cell adjacent loops (representing AB, BCin, or ACin).", false);
         return false;
       }
     } else {
-      // DIFFERENCE: 4 individual cells
+      // SUM: 4 individual cells
       if (selection.length > 1) {
         showKMapAlert("No groupings are possible on this checkerboard map! Select and group each cell individually.", false);
         return false;
@@ -2855,7 +2840,7 @@ function findCellElement(coords) {
   const view = state.kmap.view;
   const target = state.kmap.target;
   if (view === 'ha') {
-    const mapName = target === 'difference' ? 'hs-difference' : 'hs-borrow';
+    const mapName = target === 'sum' ? 'ha-sum' : 'ha-carry';
     return document.querySelector(`.kmap-cell-g[data-map="${mapName}"][data-row="${coords.r}"][data-col="${coords.c}"]`);
   } else {
     return document.querySelector(`.kmap-cell-g[data-map="fa"][data-row="${coords.r}"][data-col="${coords.c}"]`);
@@ -2869,9 +2854,9 @@ function updateKMapEquation() {
 
   let lhs = "";
   if (view === 'ha') {
-    lhs = target === 'difference' ? "DIFFERENCE (S) = " : "BORROW (C) = ";
+    lhs = target === 'sum' ? "SUM (S) = " : "CARRY (C) = ";
   } else {
-    lhs = target === 'difference' ? "DIFFERENCE (S) = " : "B<sub>out</sub> = ";
+    lhs = target === 'sum' ? "SUM (S) = " : "C<sub>out</sub> = ";
   }
   document.getElementById('kmap-eq-lhs').innerHTML = lhs;
 
@@ -2882,11 +2867,11 @@ function updateKMapEquation() {
 
   let termsHtml = groups.map(g => `<span class="formula-term">${g.term}</span>`).join(" + ");
   
-  if (view === 'ha' && target === 'difference' && groups.length === 2) {
+  if (view === 'ha' && target === 'sum' && groups.length === 2) {
     termsHtml += ` <span class="formula-term" style="color: var(--accent-amber);">→ A ⊕ B</span>`;
   }
-  if (view === 'fa' && target === 'difference' && groups.length === 4) {
-    termsHtml += ` <span class="formula-term" style="color: var(--accent-amber);">→ A ⊕ B ⊕ Bin</span>`;
+  if (view === 'fa' && target === 'sum' && groups.length === 4) {
+    termsHtml += ` <span class="formula-term" style="color: var(--accent-amber);">→ A ⊕ B ⊕ Cin</span>`;
   }
 
   document.getElementById('kmap-eq-rhs').innerHTML = termsHtml;
@@ -2910,11 +2895,11 @@ function updateGuidedInstructions() {
   }
 
   if (view === 'ha') {
-    if (target === 'borrow') {
+    if (target === 'carry') {
       if (numGroups === 0) {
         instructions = "Select the single cell where A=1 and B=1 (bottom-right cell) and click 'Group Selection'.";
       } else {
-        instructions = "Great! You derived C = A·B. Borrow K-map is complete!";
+        instructions = "Great! You derived C = A·B. Carry K-map is complete!";
       }
     } else {
       if (numGroups === 0) {
@@ -2922,30 +2907,30 @@ function updateGuidedInstructions() {
       } else if (numGroups === 1) {
         instructions = "Now group the other '1' cell at row B=1, col A=0 (representing A'·B) individually.";
       } else {
-        instructions = "Excellent! You derived DIFFERENCE = A·B' + A'·B. Since they are diagonal, no simplification is possible, so DIFFERENCE remains as A ⊕ B.";
+        instructions = "Excellent! You derived SUM = A·B' + A'·B. Since they are diagonal, no simplification is possible, so SUM remains as A ⊕ B.";
       }
     }
   } else {
-    if (target === 'borrow') {
+    if (target === 'carry') {
       const hasAB = state.kmap.groups.some(g => g.term === "A·B");
-      const hasBCin = state.kmap.groups.some(g => g.term === "B·Bin");
-      const hasACin = state.kmap.groups.some(g => g.term === "A·Bin");
+      const hasBCin = state.kmap.groups.some(g => g.term === "B·Cin");
+      const hasACin = state.kmap.groups.some(g => g.term === "A·Cin");
       
       const missing = [];
-      if (!hasAB) missing.push("A'B (row A=0, cols BBin=11 & 10)");
-      if (!hasBCin) missing.push("BBin (col BBin=11, rows A=0 & 1)");
-      if (!hasACin) missing.push("A'Bin (row A=0, cols BBin=01 & 11)");
+      if (!hasAB) missing.push("AB (row A=1, cols BCin=11 & 10)");
+      if (!hasBCin) missing.push("BCin (col BCin=11, rows A=0 & 1)");
+      if (!hasACin) missing.push("ACin (row A=1, cols BCin=01 & 11)");
       
       if (missing.length > 0) {
         instructions = `Find and group the loops representing: ${missing.join(", ")}. Select 2 adjacent 1s and click 'Group Selection'.`;
       } else {
-        instructions = "Success! You found all 3 loops. These represent the terms AB, BCin, and ACin. Thus Bout = AB + BCin + ACin. They overlap beautifully!";
+        instructions = "Success! You found all 3 loops. These represent the terms AB, BCin, and ACin. Thus Cout = AB + BCin + ACin. They overlap beautifully!";
       }
     } else {
       if (numGroups < 4) {
         instructions = `Group each of the four '1' cells individually. (${numGroups}/4 grouped). Click a cell and click 'Group Selection'.`;
       } else {
-        instructions = "Success! You grouped all 4 cells. In this checkerboard pattern, no adjacency simplification is possible. Thus DIFFERENCE stays as A ⊕ B ⊕ Bin.";
+        instructions = "Success! You grouped all 4 cells. In this checkerboard pattern, no adjacency simplification is possible. Thus SUM stays as A ⊕ B ⊕ Cin.";
       }
     }
   }
@@ -2962,11 +2947,11 @@ function checkKMapCompletion() {
   if (state.kmap.mode === 'guided') {
     let done = false;
     if (view === 'ha') {
-      if (target === 'borrow' && numGroups === 1) done = true;
-      if (target === 'difference' && numGroups === 2) done = true;
+      if (target === 'carry' && numGroups === 1) done = true;
+      if (target === 'sum' && numGroups === 2) done = true;
     } else {
-      if (target === 'borrow' && numGroups === 3) done = true;
-      if (target === 'difference' && numGroups === 4) done = true;
+      if (target === 'carry' && numGroups === 3) done = true;
+      if (target === 'sum' && numGroups === 4) done = true;
     }
 
     if (done) {
@@ -2989,7 +2974,7 @@ function setupKMapPractice() {
   let correctIdx = 0;
 
   if (view === 'ha') {
-    if (target === 'borrow') {
+    if (target === 'carry') {
       choices = [
         "C = A·B",
         "C = A + B",
@@ -2998,26 +2983,26 @@ function setupKMapPractice() {
       ];
     } else {
       choices = [
-        "D = A ⊕ B",
+        "S = A ⊕ B",
         "S = A·B",
         "S = A + B",
         "S = A'·B'"
       ];
     }
   } else {
-    if (target === 'borrow') {
+    if (target === 'carry') {
       choices = [
-        "Bout = A·B + B·Bin + A·Bin",
-        "Bout = A·B·Bin",
-        "Bout = A·B + Bin",
-        "Bout = A + B + Bin"
+        "Cout = A·B + B·Cin + A·Cin",
+        "Cout = A·B·Cin",
+        "Cout = A·B + Cin",
+        "Cout = A + B + Cin"
       ];
     } else {
       choices = [
-        "DIFFERENCE = A ⊕ B ⊕ Bin",
-        "DIFFERENCE = A·B + B·Bin + A·Bin",
-        "DIFFERENCE = A·B·Bin",
-        "DIFFERENCE = A'·B'·Bin + A·B"
+        "SUM = A ⊕ B ⊕ Cin",
+        "SUM = A·B + B·Cin + A·Cin",
+        "SUM = A·B·Cin",
+        "SUM = A'·B'·Cin + A·B"
       ];
     }
   }
@@ -3031,7 +3016,7 @@ function setupKMapPractice() {
   state.kmap.practiceChoices.forEach((choice, idx) => {
     const btn = document.createElement('button');
     btn.className = "mcq-btn";
-    btn.innerHTML = choice.replace(/Bin/g, "B<sub>in</sub>");
+    btn.innerHTML = choice.replace(/Cin/g, "C<sub>in</sub>");
     btn.addEventListener('click', () => {
       logClick();
       playSound('click');
@@ -3061,9 +3046,9 @@ function submitKMapPractice() {
     const target = state.kmap.target;
     const numGroups = state.kmap.groups.length;
     let expectedGroups = 1;
-    if (view === 'ha' && target === 'difference') expectedGroups = 2;
-    if (view === 'fa' && target === 'borrow') expectedGroups = 3;
-    if (view === 'fa' && target === 'difference') expectedGroups = 4;
+    if (view === 'ha' && target === 'sum') expectedGroups = 2;
+    if (view === 'fa' && target === 'carry') expectedGroups = 3;
+    if (view === 'fa' && target === 'sum') expectedGroups = 4;
 
     if (numGroups < expectedGroups) {
       showKMapAlert(`Equation is correct, but you have only grouped ${numGroups}/${expectedGroups} loops! Find all groups on the map first for full credit.`, false);
@@ -3098,7 +3083,7 @@ function resetKMapLoops() {
   state.kmap.selection = [];
   state.kmap.guidedStep = 0;
 
-  const containers = ['kmap-hs-difference-loops', 'kmap-hs-borrow-loops', 'kmap-fs-loops'];
+  const containers = ['kmap-ha-sum-loops', 'kmap-ha-carry-loops', 'kmap-fa-loops'];
   containers.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = "";
@@ -3108,7 +3093,7 @@ function resetKMapLoops() {
   cells.forEach(cell => {
     cell.classList.remove('selected', 'grouped');
     
-    // Dynamically update the cell text values to match the target (DIFFERENCE or BORROW)
+    // Dynamically update the cell text values to match the target (SUM or CARRY)
     const mapType = cell.getAttribute('data-map');
     const r = parseInt(cell.getAttribute('data-row'), 10);
     const c = parseInt(cell.getAttribute('data-col'), 10);
@@ -3118,12 +3103,12 @@ function resetKMapLoops() {
       if (valText) {
         valText.textContent = getCellValue(r, c);
       }
-    } else if (mapType === 'hs-difference') {
+    } else if (mapType === 'ha-sum') {
       const valText = cell.querySelector('.kmap-cell-val');
       if (valText) {
         valText.textContent = (r === 0 && c === 1) || (r === 1 && c === 0) ? 1 : 0;
       }
-    } else if (mapType === 'hs-borrow') {
+    } else if (mapType === 'ha-carry') {
       const valText = cell.querySelector('.kmap-cell-val');
       if (valText) {
         valText.textContent = (r === 1 && c === 1) ? 1 : 0;
@@ -3144,7 +3129,7 @@ function bindKMapCellClicks() {
       const target = state.kmap.target;
 
       if (view === 'ha') {
-        const expectedMap = target === 'difference' ? 'hs-difference' : 'hs-borrow';
+        const expectedMap = target === 'sum' ? 'ha-sum' : 'ha-carry';
         if (mapName !== expectedMap) return;
       } else {
         if (mapName !== 'fa') return;
@@ -3387,7 +3372,7 @@ function initArcadeModule() {
     }
 
     if (state.currentUser && state.currentUser !== 'Guest') {
-      let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+      let registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
       let idx = registry.findIndex(s => s.rollNo === state.currentRoll);
       if (idx !== -1) {
         registry[idx].clicksCount = state.clicksCount;
@@ -3400,7 +3385,7 @@ function initArcadeModule() {
           }
           registry[idx].completionPct = Math.round((registry[idx].completedModules.length / 8) * 100);
         }
-        localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+        localStorage.setItem('logic_adder_students', JSON.stringify(registry));
       }
     }
 
@@ -3532,20 +3517,20 @@ function setupPredictQuestion() {
   state.arcade.predict.isFull = isFull;
   state.arcade.predict.a = Math.random() > 0.5 ? 1 : 0;
   state.arcade.predict.b = Math.random() > 0.5 ? 1 : 0;
-  state.arcade.predict.bin = isFull ? (Math.random() > 0.5 ? 1 : 0) : 0;
+  state.arcade.predict.cin = isFull ? (Math.random() > 0.5 ? 1 : 0) : 0;
   state.arcade.predict.selectedS = 0;
   state.arcade.predict.selectedC = 0;
   state.arcade.predict.answered = false;
 
   // Labels update
-  document.getElementById('predict-gate-type').innerText = isFull ? 'FULL SUBTRACTOR' : 'HALF SUBTRACTOR';
+  document.getElementById('predict-gate-type').innerText = isFull ? 'FULL ADDER' : 'HALF ADDER';
   document.getElementById('predict-val-a').innerText = state.arcade.predict.a;
   document.getElementById('predict-val-b').innerText = state.arcade.predict.b;
   
-  const cinRow = document.getElementById('predict-bin-row');
+  const cinRow = document.getElementById('predict-cin-row');
   if (isFull) {
     cinRow.style.display = 'block';
-    document.getElementById('predict-val-bin').innerText = state.arcade.predict.bin;
+    document.getElementById('predict-val-cin').innerText = state.arcade.predict.cin;
   } else {
     cinRow.style.display = 'none';
   }
@@ -3580,10 +3565,10 @@ function togglePredictLed(ledType) {
 
 function verifyPredictAnswer() {
   const p = state.arcade.predict;
-  const expectedDiff = p.a ^ p.b ^ p.bin;
-  const expectedBorrow = p.isFull ? (((!p.a && p.b) || (!(p.a ^ p.b) && p.bin)) ? 1 : 0) : ((!p.a && p.b) ? 1 : 0);
+  const expectedSum = p.a ^ p.b ^ p.cin;
+  const expectedCarry = p.isFull ? ((p.a & p.b) | (p.cin & (p.a ^ p.b))) : (p.a & p.b);
 
-  const correct = (p.selectedS === expectedDiff && p.selectedC === expectedBorrow);
+  const correct = (p.selectedS === expectedSum && p.selectedC === expectedCarry);
   p.answered = true;
 
   const fMsg = document.getElementById('predict-feedback-msg');
@@ -3605,9 +3590,9 @@ function verifyPredictAnswer() {
     // Context feedback explanations
     let hint = "";
     if (p.isFull) {
-      hint = `Expected: DIFFERENCE=${expectedDiff}, BORROW=${expectedBorrow}. BORROW is 1 if A < B or if a borrow is forced.`;
+      hint = `Expected: SUM=${expectedSum}, CARRY=${expectedCarry}. CARRY is 1 when at least TWO inputs are 1.`;
     } else {
-      hint = `Expected: DIFFERENCE=${expectedDiff}, BORROW=${expectedBorrow}. BORROW is 1 when minuend is smaller than subtrahend (A=0, B=1).`;
+      hint = `Expected: SUM=${expectedSum}, CARRY=${expectedCarry}. XOR outputs 1 when inputs are DIFFERENT.`;
     }
     
     fMsg.innerText = `WRONG. ${hint}`;
@@ -3638,8 +3623,8 @@ function setupTableQuestion() {
 
   const header = document.createElement('thead');
   header.innerHTML = isFull 
-    ? '<tr><th>A</th><th>B</th><th>B<sub>in</sub></th><th>DIFFERENCE</th><th>B<sub>out</sub></th></tr>'
-    : '<tr><th>A</th><th>B</th><th>DIFFERENCE</th><th>BORROW</th></tr>';
+    ? '<tr><th>A</th><th>B</th><th>C<sub>in</sub></th><th>SUM</th><th>C<sub>out</sub></th></tr>'
+    : '<tr><th>A</th><th>B</th><th>SUM</th><th>CARRY</th></tr>';
   tableEl.appendChild(header);
 
   const tbody = document.createElement('tbody');
@@ -3649,7 +3634,7 @@ function setupTableQuestion() {
   const blankCells = [];
   while (blankCells.length < 3) {
     const r = Math.floor(Math.random() * rowsCount);
-    const c = Math.floor(Math.random() * 2); // 0 = DIFFERENCE, 1 = BORROW/Bout
+    const c = Math.floor(Math.random() * 2); // 0 = SUM, 1 = CARRY/Cout
     const key = `${r}-${c}`;
     if (!blankCells.includes(key)) {
       blankCells.push(key);
@@ -3659,19 +3644,19 @@ function setupTableQuestion() {
   for (let r = 0; r < rowsCount; r++) {
     const a = (r >> 1) & 1;
     const b = r & 1;
-    const bin = isFull ? ((r >> 2) & 1) : 0;
+    const cin = isFull ? ((r >> 2) & 1) : 0;
 
-    const correctSum = a ^ b ^ bin;
-    const correctCarry = isFull ? (((!a && b) || (!(a ^ b) && bin)) ? 1 : 0) : ((!a && b) ? 1 : 0);
+    const correctSum = a ^ b ^ cin;
+    const correctCarry = isFull ? ((a & b) | (cin & (a ^ b))) : (a & b);
 
     const row = document.createElement('tr');
     
     // Input Columns
     let rowHtml = `<td>${a}</td><td>${b}</td>`;
-    if (isFull) rowHtml += `<td>${bin}</td>`;
+    if (isFull) rowHtml += `<td>${cin}</td>`;
     row.innerHTML = rowHtml;
 
-    // DIFFERENCE Cell
+    // SUM Cell
     const cellSum = document.createElement('td');
     const keyS = `${r}-0`;
     state.arcade.table.targetAnswers[keyS] = correctSum;
@@ -3687,7 +3672,7 @@ function setupTableQuestion() {
     }
     row.appendChild(cellSum);
 
-    // BORROW Cell
+    // CARRY Cell
     const cellCarry = document.createElement('td');
     const keyC = `${r}-1`;
     state.arcade.table.targetAnswers[keyC] = correctCarry;
@@ -3768,7 +3753,7 @@ function verifyTableAnswer() {
     playSound('incorrect');
     state.arcade.streak = 0;
     recordStudentMistake('Arcade: Incorrect Truth Table Fill-in');
-    fMsg.innerText = "Some inputs do not match standard subtractor outputs. Try recalculating XOR/AND paths.";
+    fMsg.innerText = "Some inputs do not match standard adder outputs. Try recalculating XOR/AND paths.";
     fMsg.className = 'feedback-text incorrect';
     panel.classList.add('flash-incorrect');
     setTimeout(() => panel.classList.remove('flash-incorrect'), 400);
@@ -3837,7 +3822,7 @@ function nextTimedQuestion() {
   // Update formula labels
   document.getElementById('timed-expr-a').innerText = t.currentA;
   document.getElementById('timed-expr-b').innerText = t.currentB;
-  document.getElementById('timed-expr-bin').innerText = t.currentCin;
+  document.getElementById('timed-expr-cin').innerText = t.currentCin;
 }
 
 function handleTimedChoice(e) {
@@ -3916,7 +3901,7 @@ function initControls() {
     playSound('click');
     const currentTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', currentTheme);
-    localStorage.setItem('logicSubtractorLab.theme', currentTheme);
+    localStorage.setItem('logicAdderLab.theme', currentTheme);
     if (typeof drawSandbox === 'function') {
       drawSandbox();
     }
@@ -3932,10 +3917,10 @@ function initControls() {
   btnReset.addEventListener('click', () => {
     const proceed = confirm("Are you sure you want to reset all module completion progress?");
     if (proceed) {
-      const savedTheme = localStorage.getItem('logicSubtractorLab.theme');
+      const savedTheme = localStorage.getItem('logicAdderLab.theme');
       localStorage.clear();
       if (savedTheme) {
-        localStorage.setItem('logicSubtractorLab.theme', savedTheme);
+        localStorage.setItem('logicAdderLab.theme', savedTheme);
       }
       state.completedModules.clear();
       state.arcade.score = 0;
@@ -3952,10 +3937,10 @@ function initControls() {
 
   // Module 8 Dashboard reset
   document.getElementById('btn-restart-lab').addEventListener('click', () => {
-    const savedTheme = localStorage.getItem('logicSubtractorLab.theme');
+    const savedTheme = localStorage.getItem('logicAdderLab.theme');
     localStorage.clear();
     if (savedTheme) {
-      localStorage.setItem('logicSubtractorLab.theme', savedTheme);
+      localStorage.setItem('logicAdderLab.theme', savedTheme);
     }
     state.completedModules.clear();
     state.arcade.score = 0;
@@ -3974,11 +3959,11 @@ function initControls() {
 // ============================================================
 
 function getSheetURL() {
-  return localStorage.getItem('logic_subtractor_sheet_url') || DEFAULT_DATABASE_URL || '';
+  return localStorage.getItem('logic_adder_sheet_url') || DEFAULT_DATABASE_URL || '';
 }
 
 function setSheetURL(url) {
-  localStorage.setItem('logic_subtractor_sheet_url', url);
+  localStorage.setItem('logic_adder_sheet_url', url);
 }
 
 // Generic POST/GET to the Google Apps Script Web App
@@ -4014,7 +3999,7 @@ async function syncStudentToSheet() {
       correct: state.correctCount,
       accuracy: state.clicksCount > 0 ? Math.round((state.correctCount / Math.max(1, state.correctCount + (state.clicksCount - state.correctCount))) * 100) : 100,
       lastActive: getFormattedDate(),
-      mistakes: (JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]').find(s => s.rollNo === state.currentRoll) || {}).mistakes || [],
+      mistakes: (JSON.parse(localStorage.getItem('logic_adder_students') || '[]').find(s => s.rollNo === state.currentRoll) || {}).mistakes || [],
       arcadeScore: state.arcade.highScore
     });
   } catch (e) {
@@ -4184,7 +4169,7 @@ function initLandingPageModule() {
       const result = await fetchAllStudentsFromSheet();
       if (result.success && result.students) {
         // Merge sheet data into localStorage registry
-        localStorage.setItem('logic_subtractor_students', JSON.stringify(result.students));
+        localStorage.setItem('logic_adder_students', JSON.stringify(result.students));
         renderAdminStats();
         renderAdminRoster();
         statusEl.className = 'sheet-status-msg success';
@@ -4253,22 +4238,22 @@ function initLandingPageModule() {
 }
 
 function evaluateDemoHA() {
-  const difference = demoA ^ demoB;
-  const borrow = demoA & demoB;
+  const sum = demoA ^ demoB;
+  const carry = demoA & demoB;
 
   document.getElementById('demo-w-a-xor').classList.toggle('active', demoA === 1);
   document.getElementById('demo-w-a-and').classList.toggle('active', demoA === 1);
   document.getElementById('demo-w-b-xor').classList.toggle('active', demoB === 1);
   document.getElementById('demo-w-b-and').classList.toggle('active', demoB === 1);
 
-  document.getElementById('demo-w-xor-difference').classList.toggle('active', difference === 1);
-  document.getElementById('demo-w-and-borrow').classList.toggle('active', borrow === 1);
+  document.getElementById('demo-w-xor-sum').classList.toggle('active', sum === 1);
+  document.getElementById('demo-w-and-carry').classList.toggle('active', carry === 1);
 
-  document.getElementById('demo-led-difference').setAttribute('fill', difference ? 'var(--accent-cyan)' : '#1f2937');
-  document.getElementById('demo-led-borrow').setAttribute('fill', borrow ? 'var(--accent-amber)' : '#1f2937');
+  document.getElementById('demo-led-sum').setAttribute('fill', sum ? 'var(--accent-cyan)' : '#1f2937');
+  document.getElementById('demo-led-carry').setAttribute('fill', carry ? 'var(--accent-amber)' : '#1f2937');
   
-  document.getElementById('demo-led-difference').style.filter = difference ? 'drop-shadow(0 0 8px rgba(0, 240, 255, 0.5))' : 'none';
-  document.getElementById('demo-led-borrow').style.filter = borrow ? 'drop-shadow(0 0 8px rgba(255, 160, 0, 0.5))' : 'none';
+  document.getElementById('demo-led-sum').style.filter = sum ? 'drop-shadow(0 0 8px rgba(0, 240, 255, 0.5))' : 'none';
+  document.getElementById('demo-led-carry').style.filter = carry ? 'drop-shadow(0 0 8px rgba(255, 160, 0, 0.5))' : 'none';
 }
 
 function startHeroLoop() {
@@ -4283,8 +4268,8 @@ function startHeroLoop() {
     const s = states[heroStateIdx];
     heroStateIdx = (heroStateIdx + 1) % states.length;
     
-    const difference = s.a ^ s.b;
-    const borrow = s.a & s.b;
+    const sum = s.a ^ s.b;
+    const carry = s.a & s.b;
     
     const lblA = document.getElementById('hero-lbl-a');
     const lblB = document.getElementById('hero-lbl-b');
@@ -4296,51 +4281,51 @@ function startHeroLoop() {
     document.getElementById('hero-wire-b-xor').classList.toggle('active', s.b === 1);
     document.getElementById('hero-wire-b-and').classList.toggle('active', s.b === 1);
     
-    document.getElementById('hero-wire-difference').classList.toggle('active', difference === 1);
-    document.getElementById('hero-wire-borrow').classList.toggle('active', borrow === 1);
+    document.getElementById('hero-wire-sum').classList.toggle('active', sum === 1);
+    document.getElementById('hero-wire-carry').classList.toggle('active', carry === 1);
     
-    const ledSum = document.getElementById('hero-led-difference');
-    const ledCarry = document.getElementById('hero-led-borrow');
+    const ledSum = document.getElementById('hero-led-sum');
+    const ledCarry = document.getElementById('hero-led-carry');
     if (ledSum) {
-      ledSum.setAttribute('fill', difference ? 'var(--accent-cyan)' : 'var(--bg-input)');
-      ledSum.style.filter = difference ? 'drop-shadow(0 0 5px rgba(0, 240, 255, 0.4))' : 'none';
+      ledSum.setAttribute('fill', sum ? 'var(--accent-cyan)' : 'var(--bg-input)');
+      ledSum.style.filter = sum ? 'drop-shadow(0 0 5px rgba(0, 240, 255, 0.4))' : 'none';
     }
     if (ledCarry) {
-      ledCarry.setAttribute('fill', borrow ? 'var(--accent-amber)' : 'var(--bg-input)');
-      ledCarry.style.filter = borrow ? 'drop-shadow(0 0 5px rgba(255, 160, 0, 0.4))' : 'none';
+      ledCarry.setAttribute('fill', carry ? 'var(--accent-amber)' : 'var(--bg-input)');
+      ledCarry.style.filter = carry ? 'drop-shadow(0 0 5px rgba(255, 160, 0, 0.4))' : 'none';
     }
   }, 2000);
 }
 
 function initStudentDirectory() {
-  if (!localStorage.getItem('logic_subtractor_students')) {
+  if (!localStorage.getItem('logic_adder_students')) {
     const mockStudents = [
       {
         name: "Alice Smith",
         classCode: "CS101-FALL",
-        completedModules: ["module-intro", "module-half-subtractor", "module-full-subtractor", "module-kmap", "module-sandbox", "module-ripple-borrow"],
+        completedModules: ["module-intro", "module-half-adder", "module-full-adder", "module-kmap", "module-sandbox", "module-ripple-carry"],
         completionPct: 75,
         clicksCount: 342,
         correctCount: 22,
         accuracy: 88,
         lastActive: "2026-07-17 14:32",
-        mistakes: ["Arcade Predict DIFFERENCE", "Table Full Subtractor Borrow", "XOR Gate Sandbox Circuit"]
+        mistakes: ["Arcade Predict SUM", "Table Full Adder Carry", "XOR Gate Sandbox Circuit"]
       },
       {
         name: "Bob Jones",
         classCode: "CS101-FALL",
-        completedModules: ["module-intro", "module-half-subtractor", "module-full-subtractor", "module-kmap"],
+        completedModules: ["module-intro", "module-half-adder", "module-full-adder", "module-kmap"],
         completionPct: 50,
         clicksCount: 198,
         correctCount: 9,
         accuracy: 64,
         lastActive: "2026-07-17 18:10",
-        mistakes: ["Borrow intro toggle", "Breadboard switch knob Cy", "Arcade Table DIFFERENCE", "K-Map adjacent cells"]
+        mistakes: ["Carry intro toggle", "Breadboard switch knob Cy", "Arcade Table SUM", "K-Map adjacent cells"]
       },
       {
         name: "Charlie Brown",
         classCode: "CS101-FALL",
-        completedModules: ["module-intro", "module-half-subtractor", "module-full-subtractor", "module-kmap", "module-sandbox", "module-ripple-borrow", "module-breadboard", "module-arcade"],
+        completedModules: ["module-intro", "module-half-adder", "module-full-adder", "module-kmap", "module-sandbox", "module-ripple-carry", "module-breadboard", "module-arcade"],
         completionPct: 100,
         clicksCount: 512,
         correctCount: 40,
@@ -4360,7 +4345,7 @@ function initStudentDirectory() {
         mistakes: ["Intro binary math"]
       }
     ];
-    localStorage.setItem('logic_subtractor_students', JSON.stringify(mockStudents));
+    localStorage.setItem('logic_adder_students', JSON.stringify(mockStudents));
   }
 }
 
@@ -4370,7 +4355,7 @@ function loginStudent(name, classCode, rollNo, sheetData) {
   state.currentClass = classCode;
   
   if (name !== 'Guest') {
-    let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+    let registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
     let profile = registry.find(s => s.rollNo === rollNo);
     
     if (sheetData) {
@@ -4400,7 +4385,7 @@ function loginStudent(name, classCode, rollNo, sheetData) {
         profile.accuracy = sheetData.accuracy || profile.accuracy;
         profile.lastActive = getFormattedDate();
       }
-      localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+      localStorage.setItem('logic_adder_students', JSON.stringify(registry));
     } else if (!profile) {
       profile = {
         rollNo: rollNo,
@@ -4417,7 +4402,7 @@ function loginStudent(name, classCode, rollNo, sheetData) {
         arcadeScore: 0
       };
       registry.push(profile);
-      localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+      localStorage.setItem('logic_adder_students', JSON.stringify(registry));
     }
     
     state.completedModules = new Set(profile.completedModules);
@@ -4434,7 +4419,7 @@ function loginStudent(name, classCode, rollNo, sheetData) {
   document.getElementById('app-landing').classList.add('hidden');
   document.getElementById('app-trainer-container').classList.remove('hidden');
 
-  const modulesList = ["module-intro", "module-half-subtractor", "module-full-subtractor", "module-kmap", "module-sandbox", "module-ripple-borrow", "module-breadboard", "module-arcade"];
+  const modulesList = ["module-intro", "module-half-adder", "module-full-adder", "module-kmap", "module-sandbox", "module-ripple-carry", "module-breadboard", "module-arcade"];
   let target = "module-intro";
   for (let m of modulesList) {
     if (!state.completedModules.has(m)) {
@@ -4447,7 +4432,7 @@ function loginStudent(name, classCode, rollNo, sheetData) {
 
 // Offline fallback login: validates against localStorage registry
 function loginStudentOffline(rollNo, className, password) {
-  const registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  const registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
   const profile = registry.find(s => 
     s.rollNo === rollNo && 
     s.classCode === className && 
@@ -4462,11 +4447,11 @@ function loginStudentOffline(rollNo, className, password) {
     // No students registered yet — allow first login and create profile
     loginStudent(rollNo, className, rollNo, null);
     // Save the password for future offline logins
-    const reg = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+    const reg = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
     const idx = reg.findIndex(s => s.rollNo === rollNo);
     if (idx !== -1) {
       reg[idx].password = password;
-      localStorage.setItem('logic_subtractor_students', JSON.stringify(reg));
+      localStorage.setItem('logic_adder_students', JSON.stringify(reg));
     }
   } else {
     errorEl.innerText = 'Invalid credentials. If this is your first time, ask your teacher to add you to the Google Sheet or connect the database.';
@@ -4531,7 +4516,7 @@ function getFormattedDate() {
 function recordStudentMistake(topic) {
   if (!state.currentUser || state.currentUser === 'Guest') return;
   
-  let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  let registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
   let idx = registry.findIndex(s => s.rollNo === state.currentRoll);
   if (idx !== -1) {
     if (!registry[idx].mistakes.includes(topic)) {
@@ -4543,19 +4528,19 @@ function recordStudentMistake(topic) {
 
 function updateStudentCompletionInRegistry() {
   if (!state.currentUser || state.currentUser === 'Guest') return;
-  let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  let registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
   let idx = registry.findIndex(s => s.rollNo === state.currentRoll);
   if (idx !== -1) {
     registry[idx].completedModules = Array.from(state.completedModules);
     registry[idx].completionPct = Math.round((state.completedModules.size / 8) * 100);
     registry[idx].lastActive = getFormattedDate();
-    localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+    localStorage.setItem('logic_adder_students', JSON.stringify(registry));
   }
 }
 
 function syncStudentSessionStats() {
   if (!state.currentUser || state.currentUser === 'Guest') return;
-  let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  let registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
   let idx = registry.findIndex(s => s.rollNo === state.currentRoll);
   if (idx !== -1) {
     registry[idx].clicksCount = state.clicksCount;
@@ -4563,12 +4548,12 @@ function syncStudentSessionStats() {
     const totalAttempts = state.correctCount + registry[idx].mistakes.length;
     registry[idx].accuracy = totalAttempts > 0 ? Math.round((state.correctCount / totalAttempts) * 100) : 100;
     registry[idx].lastActive = getFormattedDate();
-    localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+    localStorage.setItem('logic_adder_students', JSON.stringify(registry));
   }
 }
 
 function renderAdminStats() {
-  const registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  const registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
   
   document.getElementById('admin-stat-total-students').innerText = registry.length;
 
@@ -4612,7 +4597,7 @@ function renderAdminStats() {
 }
 
 function renderAdminRoster() {
-  const registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  const registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
   const searchQuery = document.getElementById('admin-search-input').value.toLowerCase();
   const sortBy = document.getElementById('admin-sort-select').value;
   const filterClass = document.getElementById('admin-filter-select').value;
@@ -4688,7 +4673,7 @@ function renderAdminRoster() {
 }
 
 function openStudentDossier(rollNo) {
-  const registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  const registry = JSON.parse(localStorage.getItem('logic_adder_students') || '[]');
   const student = registry.find(s => s.rollNo === rollNo);
   if (!student) return;
 
@@ -4699,12 +4684,12 @@ function openStudentDossier(rollNo) {
   document.getElementById('admin-detail-correct').innerText = student.correctCount;
 
   const allModules = [
-    { id: "module-intro", label: "01. Binary Borrow" },
-    { id: "module-half-subtractor", label: "02. Half Subtractor Lab" },
-    { id: "module-full-subtractor", label: "03. Full Subtractor Lab" },
+    { id: "module-intro", label: "01. Binary Carry" },
+    { id: "module-half-adder", label: "02. Half Adder Lab" },
+    { id: "module-full-adder", label: "03. Full Adder Lab" },
     { id: "module-kmap", label: "04. K-Map Lab" },
     { id: "module-sandbox", label: "05. Gate Sandbox" },
-    { id: "module-ripple-borrow", label: "06. Ripple Playground" },
+    { id: "module-ripple-carry", label: "06. Ripple Playground" },
     { id: "module-breadboard", label: "07. Breadboard/IC" },
     { id: "module-arcade", label: "08. Logic Arcade" }
   ];
@@ -4725,10 +4710,10 @@ function openStudentDossier(rollNo) {
   const badgesContainer = document.getElementById('admin-detail-badges');
   badgesContainer.innerHTML = "";
   const badges = [];
-  if (student.completedModules.includes('module-half-subtractor')) badges.push({ emoji: "⚡", label: "Half Subtractor Master" });
-  if (student.completedModules.includes('module-full-subtractor')) badges.push({ emoji: "🔋", label: "Full Subtractor Master" });
+  if (student.completedModules.includes('module-half-adder')) badges.push({ emoji: "⚡", label: "Half Adder Master" });
+  if (student.completedModules.includes('module-full-adder')) badges.push({ emoji: "🔋", label: "Full Adder Master" });
   if (student.completedModules.includes('module-kmap')) badges.push({ emoji: "🗺️", label: "K-Map Solver" });
-  if (student.completedModules.includes('module-ripple-borrow')) badges.push({ emoji: "🌊", label: "Ripple Propagator" });
+  if (student.completedModules.includes('module-ripple-carry')) badges.push({ emoji: "🌊", label: "Ripple Propagator" });
   if (student.completedModules.includes('module-arcade') && student.accuracy >= 90) badges.push({ emoji: "🎖️", label: "Perfect Arcade" });
   
   if (badges.length === 0) {
@@ -4782,8 +4767,8 @@ window.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   initLandingPageModule();
   initIntroModule();
-  initHalfSubtractorModule();
-  initFullSubtractorModule();
+  initHalfAdderModule();
+  initFullAdderModule();
   initKMapModule();
   initSandboxTools();
   initRippleCarryModule();
@@ -4796,7 +4781,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const dbUrl = urlParams.get('db') || urlParams.get('database') || urlParams.get('sheet');
     if (dbUrl && dbUrl.startsWith('http')) {
-      localStorage.setItem('logic_subtractor_sheet_url', dbUrl);
+      localStorage.setItem('logic_adder_sheet_url', dbUrl);
       console.log('Database URL configured from URL query parameter:', dbUrl);
       
       // Clean up the URL query parameter for a clean address bar
