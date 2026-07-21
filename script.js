@@ -1,0 +1,4829 @@
+// ============================================================
+// DATABASE CONFIGURATION (FOR TEACHERS)
+// ============================================================
+// Paste your Google Sheets Web App URL here to hardcode it for all students:
+const DEFAULT_DATABASE_URL = "https://script.google.com/macros/s/AKfycbx6gnu8biblSFCjSEQxVaV1cKBXmLB1xhOno3qQ9IUQRtRNy3P_vF-LaxKqLf5iTGQUyw/exec";
+
+// Global App State
+const state = {
+  activeModule: 'module-intro',
+  completedModules: new Set(),
+  exam: {
+    isActive: false,
+    timeLeft: 600,
+    violations: 0,
+    timerId: null
+  },
+  soundEnabled: false,
+  clicksCount: 0,
+  correctCount: 0,
+
+  // Module 1 (Intro) inputs
+  intro: { a: 0, b: 0 },
+
+  // Module 2 (Half Subtractor) inputs
+  halfSubtractor: { a: 0, b: 0 },
+
+  // Module 3 (Full Subtractor) inputs & views
+  fullSubtractor: { a: 0, b: 0, bin: 0, view: 'gates' },
+
+  // Module 4 (Sandbox) circuit editor data
+  sandbox: {
+    mission: 'ha', // 'ha' or 'fa'
+    a: 0,
+    b: 0,
+    bin: 0,
+    outputs: { difference: 0, borrow: 0 },
+    gates: [],     // { id, type, x, y, inputs: [{v, wireId}, {v, wireId}], output: {v, wireIds: []} }
+    selectedPaletteType: null,
+    wires: [],     // { id, fromNode: {type, id, pinIndex}, toNode: {type, id, pinIndex} }
+    selectedGate: null,
+    selectedWire: null,
+    draggingGate: null,
+    dragOffset: { x: 0, y: 0 },
+    connectingPin: null, // { type, id, pinIndex, isOutput, x, y }
+    mousePos: { x: 0, y: 0 }
+  },
+
+  // Module 5 (Ripple Borrow) data
+  ripple: {
+    a: [0, 0, 0, 0], // MSB -> LSB [A3, A2, A1, A0]
+    b: [0, 0, 0, 0], // MSB -> LSB
+    delay: 400,
+    animating: false,
+    timeoutIds: []
+  },
+
+  // Module 6 (Breadboard) data
+  breadboard: { a: 0, b: 0, bin: 0, view: 'ha' },
+
+  // Module 4 (K-Map Lab) data
+  kmap: {
+    view: 'ha',
+    target: 'difference',
+    mode: 'guided',
+    selection: [],
+    groups: [],
+    guidedStep: 0,
+    practiceChoices: [],
+    selectedChoiceIdx: -1
+  },
+
+  // Module 7 (Arcade) data
+  arcade: {
+    mode: 'predict', // 'predict', 'table', 'time'
+    score: 0,
+    highScore: 0,
+    streak: 0,
+    predict: {
+      a: 0, b: 0, bin: 0, isFull: false,
+      selectedS: 0, selectedC: 0,
+      answered: false
+    },
+    table: {
+      isFull: false,
+      userCells: {}, // "row-col": value
+      targetAnswers: {}
+    },
+    timer: {
+      duration: 30,
+      timeLeft: 30,
+      intervalId: null,
+      active: false,
+      currentA: 0,
+      currentB: 0,
+      currentCin: 0,
+      answerS: 0,
+      answerC: 0
+    }
+  },
+
+  // User session
+  currentUser: null,
+  currentRoll: null,
+  currentClass: null
+};
+
+// AUDIO SYNTH ENGINE (Web Audio API)
+let audioCtx = null;
+
+function initAudio() {
+  if (audioCtx) return;
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContextClass();
+    state.soundEnabled = true;
+    updateSoundUI();
+    playChime('welcome');
+  } catch (e) {
+    console.warn("Web Audio API not supported", e);
+  }
+}
+
+function updateSoundUI() {
+  const btn = document.getElementById('btn-sound-toggle');
+  const onIcon = document.getElementById('sound-icon-on');
+  const offIcon = document.getElementById('sound-icon-off');
+  
+  if (state.soundEnabled) {
+    btn.classList.remove('muted');
+    onIcon.classList.remove('hidden');
+    offIcon.classList.add('hidden');
+  } else {
+    btn.classList.add('muted');
+    onIcon.classList.add('hidden');
+    offIcon.classList.remove('hidden');
+  }
+}
+
+function toggleSound() {
+  if (!audioCtx) {
+    initAudio();
+  } else {
+    state.soundEnabled = !state.soundEnabled;
+    updateSoundUI();
+  }
+}
+
+// Dynamically synthesize sound effects
+function playSound(type) {
+  if (!state.soundEnabled || !audioCtx) return;
+  
+  // Resume context if suspended
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  const t = audioCtx.currentTime;
+  
+  switch(type) {
+    case 'click': {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, t);
+      osc.frequency.exponentialRampToValueAtTime(100, t + 0.05);
+      gain.gain.setValueAtTime(0.1, t);
+      gain.gain.linearRampToValueAtTime(0.001, t + 0.05);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.05);
+      break;
+    }
+    case 'correct': {
+      // Arpeggio C5 -> E5 -> G5
+      const notes = [523.25, 659.25, 783.99];
+      notes.forEach((freq, idx) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t + idx * 0.06);
+        gain.gain.setValueAtTime(0.0, t + idx * 0.06);
+        gain.gain.linearRampToValueAtTime(0.1, t + idx * 0.06 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.06 + 0.15);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t + idx * 0.06);
+        osc.stop(t + idx * 0.06 + 0.2);
+      });
+      break;
+    }
+    case 'incorrect': {
+      // Low buzz
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(130, t);
+      osc.frequency.linearRampToValueAtTime(80, t + 0.25);
+      gain.gain.setValueAtTime(0.15, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.25);
+      break;
+    }
+    case 'success': {
+      playChime('victory');
+      break;
+    }
+    case 'ripple': {
+      // Short high pulse
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, t);
+      gain.gain.setValueAtTime(0.08, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.1);
+      break;
+    }
+  }
+}
+
+function playChime(theme) {
+  const t = audioCtx.currentTime;
+  if (theme === 'welcome') {
+    const notes = [440, 554, 659, 880]; // A major
+    notes.forEach((freq, idx) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + idx * 0.1);
+      gain.gain.setValueAtTime(0.0, t + idx * 0.1);
+      gain.gain.linearRampToValueAtTime(0.08, t + idx * 0.1 + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.1 + 0.4);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t + idx * 0.1);
+      osc.stop(t + idx * 0.1 + 0.5);
+    });
+  } else if (theme === 'victory') {
+    const notes = [523, 659, 784, 1046, 1318]; // C major triad chord sweep
+    notes.forEach((freq, idx) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t + idx * 0.08);
+      gain.gain.setValueAtTime(0.0, t + idx * 0.08);
+      gain.gain.linearRampToValueAtTime(0.1, t + idx * 0.08 + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.08 + 0.5);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t + idx * 0.08);
+      osc.stop(t + idx * 0.08 + 0.6);
+    });
+  }
+}
+
+// HELPER STATE SYNCS & PROGRESS TRACKING
+function logClick() {
+  state.clicksCount++;
+  updateMasteryStats();
+}
+
+function completeModule(moduleId) {
+  if (!state.completedModules.has(moduleId)) {
+    state.completedModules.add(moduleId);
+    playSound('correct');
+    updateProgressUI();
+    updateStudentCompletionInRegistry();
+    // Sync progress to Google Sheet (async, non-blocking)
+    syncStudentToSheet();
+  }
+}
+
+function updateProgressUI() {
+  const total = 8; // Modules 1 to 8 (excluding mastery report)
+  const current = state.completedModules.size;
+  const pct = Math.round((current / total) * 100);
+  
+  document.getElementById('completion-text').innerText = `${pct}%`;
+  document.getElementById('completion-bar').style.width = `${pct}%`;
+
+  // Update navigation visual checkmarks
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    const target = item.getAttribute('data-target');
+    if (state.completedModules.has(target)) {
+      item.classList.add('completed');
+    } else {
+      item.classList.remove('completed');
+    }
+  });
+
+  updateMasteryStats();
+}
+
+function updateMasteryStats() {
+  document.getElementById('stat-modules-done').innerText = `${state.completedModules.size} / 8`;
+  document.getElementById('stat-clicks-count').innerText = state.clicksCount;
+  document.getElementById('stat-correct-count').innerText = state.correctCount;
+  document.getElementById('stat-arcade-high').innerText = state.arcade.highScore;
+
+  // Unlock badges on mastery screen
+  const badges = [
+    { id: 'badge-intro', unlocked: state.completedModules.has('module-intro') },
+    { id: 'badge-half', unlocked: state.completedModules.has('module-half-subtractor') },
+    { id: 'badge-full', unlocked: state.completedModules.has('module-full-subtractor') },
+    { id: 'badge-sandbox', unlocked: state.completedModules.has('module-sandbox') },
+    { id: 'badge-ripple', unlocked: state.completedModules.has('module-ripple-borrow') },
+    { id: 'badge-breadboard', unlocked: state.completedModules.has('module-breadboard') },
+    { id: 'badge-arcade', unlocked: state.arcade.highScore >= 150 }
+  ];
+
+  badges.forEach(b => {
+    const el = document.getElementById(b.id);
+    if (el) {
+      if (b.unlocked) {
+        el.classList.remove('locked');
+        el.classList.add('unlocked');
+      } else {
+        el.classList.add('locked');
+        el.classList.remove('unlocked');
+      }
+    }
+  });
+}
+
+// NAVIGATION STATE
+function initNavigation() {
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const target = item.getAttribute('data-target');
+      switchModule(target);
+    });
+  });
+
+  const nextBtns = document.querySelectorAll('.next-step-btn');
+  nextBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const next = btn.getAttribute('data-next');
+      switchModule(next);
+    });
+  });
+}
+
+let sandboxAnimationId = null;
+function startSandboxAnimation() {
+  if (sandboxAnimationId) return;
+  function anim() {
+    drawSandbox();
+    sandboxAnimationId = requestAnimationFrame(anim);
+  }
+  sandboxAnimationId = requestAnimationFrame(anim);
+}
+
+function stopSandboxAnimation() {
+  if (sandboxAnimationId) {
+    cancelAnimationFrame(sandboxAnimationId);
+    sandboxAnimationId = null;
+  }
+}
+
+function switchModule(targetId) {
+  playSound('click');
+  // Mark current as complete on navigation click to encourage user journey completion
+  if (state.activeModule !== 'module-arcade' && state.activeModule !== 'module-mastery' && state.activeModule !== 'module-sandbox' && state.activeModule !== 'module-kmap') {
+    completeModule(state.activeModule);
+  }
+
+  // Deactivate current
+  document.getElementById(state.activeModule).classList.remove('active');
+  const oldNav = document.querySelector(`.nav-item[data-target="${state.activeModule}"]`);
+  if (oldNav) {
+    oldNav.classList.remove('active');
+    oldNav.removeAttribute('aria-current');
+  }
+
+  // Activate target
+  document.getElementById(targetId).classList.add('active');
+  const newNav = document.querySelector(`.nav-item[data-target="${targetId}"]`);
+  if (newNav) {
+    newNav.classList.add('active');
+    newNav.setAttribute('aria-current', 'page');
+  }
+
+  state.activeModule = targetId;
+
+  // Sandbox setup or resize redraw if target is sandbox
+  if (targetId === 'module-sandbox') {
+    initSandboxCanvas();
+    startSandboxAnimation();
+  } else {
+    stopSandboxAnimation();
+  }
+}
+
+// MODULE 1: INTRO LOGIC
+function initIntroModule() {
+  const toggleA = document.getElementById('intro-bit-a');
+  const toggleB = document.getElementById('intro-bit-b');
+
+  function updateIntro() {
+    const a = state.intro.a;
+    const b = state.intro.b;
+    const binS = a ^ b;
+    const binC = (!a && b) ? 1 : 0;
+    const decVal = a - b;
+
+    // Binary elements
+    document.getElementById('binary-borrow-val').innerText = binC;
+    document.getElementById('binary-borrow-val').className = `bit-box borrow-bit ${binC ? 'active' : ''}`;
+    
+    document.getElementById('binary-res-s').innerText = binS;
+    document.getElementById('binary-res-s').className = `bit-box ${binS ? 'active' : ''}`;
+    document.getElementById('binary-res-c').innerText = binC;
+    document.getElementById('binary-res-c').className = `bit-box active-borrow ${binC ? 'active' : ''}`;
+
+    // Decimal elements
+    document.getElementById('dec-a').innerText = a;
+    document.getElementById('dec-b').innerText = b;
+    document.getElementById('dec-difference').innerText = decVal;
+
+    // Explanations
+    let desc = "";
+    if (a === 0 && b === 0) {
+      desc = "Both inputs are 0. Difference is 0, no borrow generated.";
+    } else if (a === 1 && b === 0) {
+      desc = "Minuend A is 1 and Subtrahend B is 0. 1 - 0 = 1. Difference is 1, no borrow generated.";
+    } else if (a === 1 && b === 1) {
+      desc = "Both inputs are 1. 1 - 1 = 0. Difference is 0, no borrow generated.";
+    } else {
+      desc = "Minuend A is 0 and Subtrahend B is 1. We must borrow from the next column! Difference is 1, Borrow is 1.";
+      completeModule('module-intro');
+    }
+    document.getElementById('intro-explanation').innerText = desc;
+  }
+
+  toggleA.addEventListener('click', () => {
+    logClick();
+    state.intro.a = state.intro.a ? 0 : 1;
+    toggleA.innerText = state.intro.a;
+    toggleA.classList.toggle('active', state.intro.a === 1);
+    playSound('click');
+    updateIntro();
+  });
+
+  toggleB.addEventListener('click', () => {
+    logClick();
+    state.intro.b = state.intro.b ? 0 : 1;
+    toggleB.innerText = state.intro.b;
+    toggleB.classList.toggle('active', state.intro.b === 1);
+    playSound('click');
+    updateIntro();
+  });
+
+  updateIntro();
+}
+
+// MODULE 2: HALF SUBTRACTOR LOGIC
+function initHalfSubtractorModule() {
+  const switchA = document.getElementById('hs-switch-a');
+  const switchB = document.getElementById('hs-switch-b');
+
+  function evaluateHalfSubtractor() {
+    const a = state.halfSubtractor.a;
+    const b = state.halfSubtractor.b;
+    const difference = a ^ b;
+    const borrow = (!a && b) ? 1 : 0;
+
+    // Visual switches update
+    switchA.innerText = a;
+    switchA.classList.toggle('active', a === 1);
+    switchB.innerText = b;
+    switchB.classList.toggle('active', b === 1);
+
+    // Wire path signals
+    setWireState('hs-wire-a-xor', a);
+    setWireState('hs-wire-a-and', a);
+    setWireState('hs-wire-b-xor', b);
+    setWireState('hs-wire-b-and', b);
+    setWireState('hs-wire-xor-difference', difference);
+    setWireState('hs-wire-and-borrow', borrow);
+
+    // Pulse animation flow
+    setPulseState('hs-pulse-a-xor', a, 'active-input');
+    setPulseState('hs-pulse-a-and', a, 'active-input');
+    setPulseState('hs-pulse-b-xor', b, 'active-input');
+    setPulseState('hs-pulse-b-and', b, 'active-input');
+    setPulseState('hs-pulse-xor-difference', difference, 'active-difference');
+    setPulseState('hs-pulse-and-borrow', borrow, 'active-borrow');
+
+    // Gate Active styles
+    document.getElementById('hs-xor-gate').classList.toggle('active', (a || b) && !(a && b));
+    document.getElementById('hs-and-gate').classList.toggle('active', !a && b);
+    
+    // Set NOT wire state
+    setWireState('hs-wire-a-and-not', !a);
+
+    // LEDs
+    document.getElementById('hs-led-difference').classList.toggle('active', difference === 1);
+    document.getElementById('hs-led-borrow').classList.toggle('active', borrow === 1);
+
+    // Truth Table highlight
+    const rowKey = `${a}${b}`;
+    const tableRows = document.querySelectorAll('#hs-truth-table tbody tr');
+    tableRows.forEach(row => {
+      if (row.getAttribute('data-inputs') === rowKey) {
+        row.classList.add('active-row');
+      } else {
+        row.classList.remove('active-row');
+      }
+    });
+
+    // Solve condition check
+    if (a === 1 && b === 1) {
+      completeModule('module-half-subtractor');
+    }
+  }
+
+  switchA.addEventListener('click', () => {
+    logClick();
+    state.halfSubtractor.a = state.halfSubtractor.a ? 0 : 1;
+    playSound('click');
+    evaluateHalfSubtractor();
+  });
+
+  switchB.addEventListener('click', () => {
+    logClick();
+    state.halfSubtractor.b = state.halfSubtractor.b ? 0 : 1;
+    playSound('click');
+    evaluateHalfSubtractor();
+  });
+
+  evaluateHalfSubtractor();
+}
+
+// Utility SVG Wire Manipulation Helpers
+function setWireState(id, active) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.toggle('active', active === 1);
+  }
+}
+
+function setPulseState(id, active, activeClass) {
+  const el = document.getElementById(id);
+  if (el) {
+    if (active === 1) {
+      el.classList.remove('hidden');
+      el.classList.add(activeClass);
+    } else {
+      el.classList.add('hidden');
+      el.classList.remove('active-input', 'active-difference', 'active-borrow');
+    }
+  }
+}
+
+// MODULE 3: FULL SUBTRACTOR LOGIC
+function initFullSubtractorModule() {
+  const swA = document.getElementById('fs-switch-a');
+  const swB = document.getElementById('fs-switch-b');
+  const swCin = document.getElementById('fs-switch-bin');
+  
+  const blockSwA = document.getElementById('fs-block-switch-a');
+  const blockSwB = document.getElementById('fs-block-switch-b');
+  const blockSwCin = document.getElementById('fs-block-switch-bin');
+
+  const btnViewGates = document.getElementById('btn-fs-view-gates');
+  const btnViewBlocks = document.getElementById('btn-fs-view-blocks');
+  const faGateSvg = document.getElementById('fs-gate-svg');
+  const faBlockSvg = document.getElementById('fs-block-svg');
+
+  function evaluateFullSubtractor() {
+    const a = state.fullSubtractor.a;
+    const b = state.fullSubtractor.b;
+    const bin = state.fullSubtractor.bin;
+
+    const difference = a ^ b ^ bin;
+    const xor1_out = a ^ b;
+    const and1_out = (!a && b) ? 1 : 0;
+    const and2_out = (bin && !xor1_out) ? 1 : 0;
+    const bout = and1_out | and2_out;
+
+    // Switch text update
+    swA.innerText = a; swA.classList.toggle('active', a === 1);
+    swB.innerText = b; swB.classList.toggle('active', b === 1);
+    swCin.innerText = bin; swCin.classList.toggle('active', bin === 1);
+
+    if (blockSwA) {
+      blockSwA.innerText = a; blockSwA.classList.toggle('active', a === 1);
+    }
+    if (blockSwB) {
+      blockSwB.innerText = b; blockSwB.classList.toggle('active', b === 1);
+    }
+    if (blockSwCin) {
+      blockSwCin.innerText = bin; blockSwCin.classList.toggle('active', bin === 1);
+    }
+
+    // GATE VIEW WIRE signals
+    setWireState('fs-w-a-xor1', a);
+    setWireState('fs-w-a-and1', a);
+    setWireState('fs-w-b-xor1', b);
+    setWireState('fs-w-b-and1', b);
+    setWireState('fs-w-bin-xor2', bin);
+    setWireState('fs-w-bin-and2', bin);
+    setWireState('fs-w-xor1-xor2', xor1_out);
+    setWireState('fs-w-xor1-and2', xor1_out);
+    setWireState('fs-w-and1-or', and1_out);
+    setWireState('fs-w-and2-or', and2_out);
+    setWireState('fs-w-xor2-difference', difference);
+    setWireState('fs-w-or-borrow', bout);
+
+    // GATE VIEW Pulse flow
+    setPulseState('fs-p-a-xor1', a, 'active-input');
+    setPulseState('fs-p-a-and1', a, 'active-input');
+    setPulseState('fs-p-b-xor1', b, 'active-input');
+    setPulseState('fs-p-b-and1', b, 'active-input');
+    setPulseState('fs-p-bin-xor2', bin, 'active-input');
+    setPulseState('fs-p-bin-and2', bin, 'active-input');
+    setPulseState('fs-p-xor1-xor2', xor1_out, 'active-input');
+    setPulseState('fs-p-xor1-and2', xor1_out, 'active-input');
+    setPulseState('fs-p-and1-or', and1_out, 'active-input');
+    setPulseState('fs-p-and2-or', and2_out, 'active-input');
+    setPulseState('fs-p-xor2-difference', difference, 'active-difference');
+    setPulseState('fs-p-or-borrow', bout, 'active-borrow');
+
+    // BLOCK VIEW WIRE signals
+    setWireState('fs-wb-a', a);
+    setWireState('fs-wb-b', b);
+    setWireState('fs-wb-bin', bin);
+    setWireState('fs-wb-ha1s', xor1_out);
+    setWireState('fs-wb-ha1c', and1_out);
+    setWireState('fs-wb-ha2c', and2_out);
+    setWireState('fs-wb-difference', difference);
+    setWireState('fs-wb-borrow', bout);
+
+    // BLOCK VIEW Pulse flow
+    setPulseState('fs-pb-a', a, 'active-input');
+    setPulseState('fs-pb-b', b, 'active-input');
+    setPulseState('fs-pb-bin', bin, 'active-input');
+    setPulseState('fs-pb-ha1s', xor1_out, 'active-input');
+    setPulseState('fs-pb-ha1c', and1_out, 'active-input');
+    setPulseState('fs-pb-ha2c', and2_out, 'active-input');
+    setPulseState('fs-pb-difference', difference, 'active-difference');
+    setPulseState('fs-pb-borrow', bout, 'active-borrow');
+
+    // Gate Active outlines
+    document.getElementById('fs-xor1').classList.toggle('active', xor1_out === 1);
+    document.getElementById('fs-and1').classList.toggle('active', and1_out === 1);
+    document.getElementById('fs-xor2').classList.toggle('active', difference === 1);
+    document.getElementById('fs-and2').classList.toggle('active', and2_out === 1);
+    document.getElementById('fs-or').classList.toggle('active', bout === 1);
+    
+    // Set NOT wire states
+    setWireState('fs-w-a-and1-not', !a);
+    setWireState('fs-w-xor1-and2-not', !xor1_out);
+
+    // Block visual active states
+    document.getElementById('fs-ha1-block').classList.toggle('active', a || b);
+    document.getElementById('fs-ha2-block').classList.toggle('active', xor1_out || bin);
+    document.getElementById('fs-block-or-gate').classList.toggle('active', bout === 1);
+
+    // LEDs
+    document.getElementById('fs-led-difference').classList.toggle('active', difference === 1);
+    document.getElementById('fs-led-borrow').classList.toggle('active', bout === 1);
+    document.getElementById('fs-led-difference-block').classList.toggle('active', difference === 1);
+    document.getElementById('fs-led-borrow-block').classList.toggle('active', bout === 1);
+
+    // Truth Table active row
+    const rowKey = `${a}${b}${bin}`;
+    const tableRows = document.querySelectorAll('#fs-truth-table tbody tr');
+    tableRows.forEach(row => {
+      if (row.getAttribute('data-inputs') === rowKey) {
+        row.classList.add('active-row');
+      } else {
+        row.classList.remove('active-row');
+      }
+    });
+
+    // Check completion condition (all 3 inputs HIGH demonstrates all borrowing pathways)
+    if (a === 1 && b === 1 && bin === 1) {
+      completeModule('module-full-subtractor');
+    }
+  }
+
+  // View switches
+  btnViewGates.addEventListener('click', () => {
+    logClick();
+    state.fullSubtractor.view = 'gates';
+    btnViewGates.classList.add('active');
+    btnViewBlocks.classList.remove('active');
+    faGateSvg.classList.remove('hidden');
+    faBlockSvg.classList.add('hidden');
+    playSound('click');
+  });
+
+  btnViewBlocks.addEventListener('click', () => {
+    logClick();
+    state.fullSubtractor.view = 'blocks';
+    btnViewBlocks.classList.add('active');
+    btnViewGates.classList.remove('active');
+    faBlockSvg.classList.remove('hidden');
+    faGateSvg.classList.add('hidden');
+    playSound('click');
+  });
+
+  // Toggles
+  const toggleA = () => {
+    logClick();
+    state.fullSubtractor.a = state.fullSubtractor.a ? 0 : 1;
+    playSound('click');
+    evaluateFullSubtractor();
+  };
+  swA.addEventListener('click', toggleA);
+  if (blockSwA) blockSwA.addEventListener('click', toggleA);
+
+  const toggleB = () => {
+    logClick();
+    state.fullSubtractor.b = state.fullSubtractor.b ? 0 : 1;
+    playSound('click');
+    evaluateFullSubtractor();
+  };
+  swB.addEventListener('click', toggleB);
+  if (blockSwB) blockSwB.addEventListener('click', toggleB);
+
+  const toggleCin = () => {
+    logClick();
+    state.fullSubtractor.bin = state.fullSubtractor.bin ? 0 : 1;
+    playSound('click');
+    evaluateFullSubtractor();
+  };
+  swCin.addEventListener('click', toggleCin);
+  if (blockSwCin) blockSwCin.addEventListener('click', toggleCin);
+
+  evaluateFullSubtractor();
+}
+
+// MODULE 4: DRAG AND DROP CIRCUIT SANDBOX ENGINE
+let sandboxCanvas = null;
+let sandboxCtx = null;
+const GRID_SIZE = 20;
+
+function initSandboxCanvas() {
+  sandboxCanvas = document.getElementById('sandbox-canvas');
+  if (!sandboxCanvas) return;
+  sandboxCtx = sandboxCanvas.getContext('2d');
+  
+  // Set dimensions correctly and clear listeners to prevent duplicates
+  sandboxCanvas.width = 700;
+  sandboxCanvas.height = 480;
+
+  // Setup click triggers
+  sandboxCanvas.removeEventListener('mousedown', onSandboxMouseDown);
+  sandboxCanvas.addEventListener('mousedown', onSandboxMouseDown);
+  sandboxCanvas.removeEventListener('mousemove', onSandboxMouseMove);
+  sandboxCanvas.addEventListener('mousemove', onSandboxMouseMove);
+  window.removeEventListener('mouseup', onSandboxMouseUp);
+  window.addEventListener('mouseup', onSandboxMouseUp);
+
+  // Setup Touch support triggers for mobile
+  sandboxCanvas.removeEventListener('touchstart', onSandboxTouchStart);
+  sandboxCanvas.addEventListener('touchstart', onSandboxTouchStart, { passive: false });
+  sandboxCanvas.removeEventListener('touchmove', onSandboxTouchMove);
+  sandboxCanvas.addEventListener('touchmove', onSandboxTouchMove, { passive: false });
+  window.removeEventListener('touchend', onSandboxTouchEnd);
+  window.addEventListener('touchend', onSandboxTouchEnd);
+
+  resetSandboxElements();
+  drawSandbox();
+}
+
+function resetSandboxElements() {
+  state.sandbox.gates = [];
+  state.sandbox.wires = [];
+  state.sandbox.selectedGate = null;
+  state.sandbox.selectedWire = null;
+  state.sandbox.a = 0;
+  state.sandbox.b = 0;
+  state.sandbox.bin = 0;
+  state.sandbox.outputs = { difference: 0, borrow: 0 };
+  
+  updateSandboxSidepanels();
+  updateGraderStatus();
+}
+
+function addGateToSandbox(type, x, y) {
+  console.log(`[DEBUG_PLACE] addGateToSandbox called with type=${type} x=${x} y=${y}`);
+  const snapX = Math.round(x / GRID_SIZE) * GRID_SIZE - 30; // center it offset
+  const snapY = Math.round(y / GRID_SIZE) * GRID_SIZE - 20;
+
+  // Create sandbox gate
+  const gateId = 'gate_' + Date.now();
+  const newGate = {
+    id: gateId,
+    type: type,
+    x: snapX,
+    y: snapY,
+    width: 60,
+    height: 40,
+    inputs: [
+      { v: 0, wireId: null, x: snapX, y: snapY + 12 },
+      { v: 0, wireId: null, x: snapX, y: snapY + 28 }
+    ],
+    output: { v: 0, wireIds: [], x: snapX + 60, y: snapY + 20 }
+  };
+
+  state.sandbox.gates.push(newGate);
+  playSound('click');
+  evaluateSandboxCircuit();
+  drawSandbox();
+}
+
+function updatePaletteDraggables() {
+  const items = document.querySelectorAll('.palette-item');
+  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+  items.forEach(item => {
+    // Remove draggable on touch devices — it suppresses click/tap events
+    if (isTouchDevice) {
+      item.removeAttribute('draggable');
+    }
+
+    // Desktop: HTML5 drag-and-drop
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('gate-type', item.getAttribute('data-gate-type'));
+    });
+
+    let lastTouchTime = 0;
+
+    // Gate selection handler (shared by click and touch)
+    function selectGate(e, isTouch) {
+      if (e && e.preventDefault && e.cancelable !== false) e.preventDefault();
+      
+      const now = Date.now();
+      if (isTouch) {
+        lastTouchTime = now;
+      } else {
+        // If a click event is received within 600ms of a touch event, it's a simulated click.
+        // Ignore it to prevent double-firing (select then immediately deselect).
+        if (now - lastTouchTime < 600) {
+          console.log('[DEBUG_PALETTE] Ignoring simulated click event to prevent double-fire.');
+          return;
+        }
+      }
+
+      const type = item.getAttribute('data-gate-type');
+      console.log(`[DEBUG_PALETTE] selectGate called: type=${type} isTouch=${isTouch} currentSelected=${state.sandbox.selectedPaletteType}`);
+      
+      // If already selected, deselect
+      if (state.sandbox.selectedPaletteType === type) {
+        state.sandbox.selectedPaletteType = null;
+        item.classList.remove('selected-palette-item');
+      } else {
+        // Deselect others
+        items.forEach(el => el.classList.remove('selected-palette-item'));
+        state.sandbox.selectedPaletteType = type;
+        item.classList.add('selected-palette-item');
+      }
+      playSound('click');
+    }
+
+    // Click for desktop
+    item.addEventListener('click', (e) => selectGate(e, false));
+
+    // Touchstart for mobile (fires instantaneously, ignoring scrolling drag actions)
+    item.addEventListener('touchstart', (e) => {
+      if (e.cancelable) e.preventDefault(); // Prevent subsequent click (double-fire)
+      e.stopPropagation();
+      selectGate(e, true);
+    }, { passive: false });
+  });
+
+  const wrapper = document.querySelector('.sandbox-canvas-wrapper');
+  wrapper.addEventListener('dragover', (e) => {
+    e.preventDefault();
+  });
+
+  wrapper.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('gate-type');
+    if (!type) return;
+
+    // Get drop coordinate relative to canvas bounds
+    const rect = sandboxCanvas.getBoundingClientRect();
+    const dropX = e.clientX - rect.left;
+    const dropY = e.clientY - rect.top;
+
+    addGateToSandbox(type, dropX, dropY);
+  });
+}
+
+// Side panels containing interactive Switch buttons and glowing output LEDs (Deprecated - rendered on canvas now)
+function updateSandboxSidepanels() {
+  const inPanel = document.getElementById('canvas-inputs-panel');
+  const outPanel = document.getElementById('canvas-outputs-panel');
+  if (inPanel) inPanel.innerHTML = '';
+  if (outPanel) outPanel.innerHTML = '';
+}
+
+// Logic solver for Sandbox node inputs & wire loops
+function evaluateSandboxCircuit() {
+  const isFA = (state.sandbox.mission === 'fa');
+  
+  // Clean values
+  state.sandbox.gates.forEach(g => {
+    g.inputs[0].v = 0;
+    g.inputs[1].v = 0;
+    g.output.v = 0;
+  });
+
+  // Recursively evaluate pin value
+  function evaluatePin(pinType, componentId, pinIdx, visitedGates = new Set()) {
+    if (pinType === 'input_port') {
+      const pinName = componentId; // 'a', 'b', or 'bin'
+      return state.sandbox[pinName] || 0;
+    }
+
+    if (pinType === 'gate_input') {
+      // Find wire connecting to this input
+      const incomingWire = state.sandbox.wires.find(w => 
+        w.toNode.type === 'gate' && w.toNode.id === componentId && w.toNode.pinIndex === pinIdx
+      );
+      if (!incomingWire) return 0;
+      return evaluatePin(incomingWire.fromNode.type, incomingWire.fromNode.id, incomingWire.fromNode.pinIndex, visitedGates);
+    }
+
+    if (pinType === 'gate_output' || pinType === 'gate') {
+      const gate = state.sandbox.gates.find(g => g.id === componentId);
+      if (!gate) return 0;
+      
+      // Cycle detection protection
+      if (visitedGates.has(componentId)) {
+        return 0; // Cycle detected: feedback loops are calculated as 0
+      }
+      visitedGates.add(componentId);
+
+      // Evaluate the gate inputs
+      const v0 = evaluatePin('gate_input', componentId, 0, new Set(visitedGates));
+      const v1 = evaluatePin('gate_input', componentId, 1, new Set(visitedGates));
+      gate.inputs[0].v = v0;
+      gate.inputs[1].v = v1;
+
+      let outVal = 0;
+      if (gate.type === 'AND') outVal = v0 & v1;
+      else if (gate.type === 'OR') outVal = v0 | v1;
+      else if (gate.type === 'XOR') outVal = v0 ^ v1;
+
+      gate.output.v = outVal;
+      return outVal;
+    }
+
+    return 0;
+  }
+
+  // Evaluate the global outputs DIFFERENCE and BORROW
+  const outPins = ['difference', 'borrow'];
+  state.sandbox.outputs = {};
+  
+  outPins.forEach(p => {
+    const wire = state.sandbox.wires.find(w => w.toNode.type === 'output_port' && w.toNode.id === p);
+    let val = 0;
+    if (wire) {
+      val = evaluatePin(wire.fromNode.type, wire.fromNode.id, wire.fromNode.pinIndex);
+    }
+    state.sandbox.outputs[p] = val;
+  });
+
+  updateGraderStatus();
+}
+
+// Background auto-grader: verify full truth table combinational mapping
+function checkCircuitCorrectness() {
+  const isFA = (state.sandbox.mission === 'fa');
+  const statesToTest = isFA ? 8 : 4;
+  let correctMatches = 0;
+  const coverage = [];
+
+  // Temporary snapshot of current UI values to restore later
+  const snapA = state.sandbox.a || 0;
+  const snapB = state.sandbox.b || 0;
+  const snapCin = state.sandbox.bin || 0;
+
+  // Topological gate solver inside checker
+  function solveTemp(inA, inB, inCin) {
+    const tempInputs = { a: inA, b: inB, bin: inCin };
+    const tempGateVals = {};
+    
+    function evalTempPin(type, id, idx, visited = new Set()) {
+      if (type === 'input_port') return tempInputs[id] || 0;
+      if (type === 'gate_input') {
+        const wire = state.sandbox.wires.find(w => w.toNode.type === 'gate' && w.toNode.id === id && w.toNode.pinIndex === idx);
+        if (!wire) return 0;
+        return evalTempPin(wire.fromNode.type, wire.fromNode.id, wire.fromNode.pinIndex, visited);
+      }
+      if (type === 'gate_output' || type === 'gate') {
+        if (visited.has(id)) return 0;
+        visited.add(id);
+        
+        const g = state.sandbox.gates.find(item => item.id === id);
+        if (!g) return 0;
+        const v0 = evalTempPin('gate_input', id, 0, new Set(visited));
+        const v1 = evalTempPin('gate_input', id, 1, new Set(visited));
+        
+        let res = 0;
+        if (g.type === 'AND') res = v0 & v1;
+        else if (g.type === 'OR') res = v0 | v1;
+        else if (g.type === 'XOR') res = v0 ^ v1;
+        
+        return res;
+      }
+      return 0;
+    }
+
+    const outResults = {};
+    ['difference', 'borrow'].forEach(p => {
+      const wire = state.sandbox.wires.find(w => w.toNode.type === 'output_port' && w.toNode.id === p);
+      outResults[p] = wire ? evalTempPin(wire.fromNode.type, wire.fromNode.id, wire.fromNode.pinIndex) : 0;
+    });
+
+    return outResults;
+  }
+
+  // Iterate over truth table combinations
+  for (let i = 0; i < statesToTest; i++) {
+    const a = (i >> 1) & 1;
+    const b = i & 1;
+    const bin = isFA ? ((i >> 2) & 1) : 0;
+
+    // Expected Output
+    const targetDiff = a ^ b ^ bin;
+    const targetBorrow = isFA ? (((!a && b) || (!(a ^ b) && bin)) ? 1 : 0) : ((!a && b) ? 1 : 0);
+
+    // Actual sandbox output
+    const res = solveTemp(a, b, bin);
+    const correct = (res.difference === targetDiff && res.borrow === targetBorrow);
+    
+    if (correct) {
+      correctMatches++;
+    }
+    coverage.push({ correct, inputLabel: isFA ? `${bin}${a}${b}` : `${a}${b}` });
+  }
+
+  // Restore snapshots
+  state.sandbox.a = snapA;
+  state.sandbox.b = snapB;
+  state.sandbox.bin = snapCin;
+
+  return {
+    isCorrect: correctMatches === statesToTest,
+    coverage: coverage
+  };
+}
+
+function updateGraderStatus() {
+  const check = checkCircuitCorrectness();
+  const eqEl = document.getElementById('sandbox-equation-status');
+  const miniTable = document.getElementById('sandbox-mini-table');
+
+  miniTable.innerHTML = '';
+  
+  if (state.sandbox.mission === 'fa') {
+    miniTable.className = 'mini-grid fs-cols';
+  } else {
+    miniTable.className = 'mini-grid';
+  }
+
+  // Draw cells
+  check.coverage.forEach(cov => {
+    const cell = document.createElement('div');
+    cell.className = `mini-cell ${cov.correct ? 'success' : ''}`;
+    cell.innerText = cov.inputLabel;
+    cell.title = cov.correct ? `Combination ${cov.inputLabel} CORRECT` : `Combination ${cov.inputLabel} INCORRECT`;
+    miniTable.appendChild(cell);
+  });
+
+  // Global verified trigger
+  if (check.isCorrect) {
+    eqEl.innerText = 'VERIFIED';
+    eqEl.className = 'status-badge success';
+    triggerSandboxSuccess();
+  } else {
+    eqEl.innerText = 'INCOMPLETE';
+    eqEl.className = 'status-badge error';
+  }
+}
+
+function triggerSandboxSuccess() {
+  const overlay = document.getElementById('sandbox-success-overlay');
+  const msg = document.getElementById('sandbox-success-msg');
+  
+  if (state.sandbox.mission === 'ha') {
+    msg.innerHTML = 'Your custom circuit successfully validates the <strong>Half Subtractor</strong> truth table. High five! ⚡';
+  } else {
+    msg.innerHTML = 'Excellent! You have successfully built a full gate-level <strong>Full Subtractor</strong>. You are ready for high-speed ripple chains!';
+  }
+
+  overlay.classList.remove('hidden');
+  playSound('success');
+  completeModule('module-sandbox');
+}
+
+// Mouse coordinates logic in canvas workspace (supporting touch and mouse events)
+function getMouseCoordinates(e) {
+  const rect = sandboxCanvas.getBoundingClientRect();
+  
+  let clientX = e.clientX;
+  let clientY = e.clientY;
+  
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else if (e.changedTouches && e.changedTouches.length > 0) {
+    clientX = e.changedTouches[0].clientX;
+    clientY = e.changedTouches[0].clientY;
+  }
+  
+  // Guard against division by zero if canvas is hidden
+  const widthRatio = rect.width > 0 ? (sandboxCanvas.width / rect.width) : 1;
+  const heightRatio = rect.height > 0 ? (sandboxCanvas.height / rect.height) : 1;
+
+  const calculatedX = (clientX - rect.left) * widthRatio;
+  const calculatedY = (clientY - rect.top) * heightRatio;
+
+  console.log(`[DEBUG_COORD] type=${e.type} clientX=${clientX} clientY=${clientY} rectLeft=${rect.left} rectTop=${rect.top} rectWidth=${rect.width} rectHeight=${rect.height} => x=${calculatedX} y=${calculatedY}`);
+
+  return {
+    x: calculatedX,
+    y: calculatedY
+  };
+}
+
+// Coordinate mappings for pin connectors on the Canvas layout
+function getPinPosition(type, id, pinIdx) {
+  if (type === 'input_port') {
+    const isFA = (state.sandbox.mission === 'fa');
+    const x = 42;
+    if (id === 'a') return { x, y: 120 };
+    if (id === 'b') return { x, y: 240 };
+    if (id === 'bin') return { x, y: 360 };
+  }
+  if (type === 'output_port') {
+    const x = 670;
+    if (id === 'difference') return { x, y: 180 };
+    if (id === 'borrow') return { x, y: 300 };
+  }
+  if (type === 'gate') {
+    const gate = state.sandbox.gates.find(g => g.id === id);
+    if (!gate) return { x: 0, y: 0 };
+    if (pinIdx === 'out' || pinIdx === 2) {
+      return { x: gate.x + 60, y: gate.y + 20 };
+    } else {
+      return { x: gate.x, y: gate.y + (pinIdx === 0 ? 12 : 28) };
+    }
+  }
+  return { x: 0, y: 0 };
+}
+
+// Pin hover detection bounds
+function getPinAtPosition(pos) {
+  const isFA = (state.sandbox.mission === 'fa');
+  const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth < 640);
+  
+  const portTolerance = isTouch ? 35 : 26;
+  const gateOutTolerance = isTouch ? 24 : 18;
+  const gateInTolerance = isTouch ? 20 : 14;
+
+  let bestPin = null;
+  let bestDist = Infinity;
+
+  // 1. Check global inputs (larger tolerance since they are far apart)
+  const inputs = isFA ? ['a', 'b', 'bin'] : ['a', 'b'];
+  for (let inId of inputs) {
+    const pinPos = getPinPosition('input_port', inId);
+    const dist = Math.hypot(pos.x - pinPos.x, pos.y - pinPos.y);
+    if (dist <= portTolerance && dist < bestDist) {
+      bestPin = { type: 'input_port', id: inId, pinIndex: 0, isOutput: true, x: pinPos.x, y: pinPos.y };
+      bestDist = dist;
+    }
+  }
+
+  // 2. Check global outputs
+  const outputs = ['difference', 'borrow'];
+  for (let outId of outputs) {
+    const pinPos = getPinPosition('output_port', outId);
+    const dist = Math.hypot(pos.x - pinPos.x, pos.y - pinPos.y);
+    if (dist <= portTolerance && dist < bestDist) {
+      bestPin = { type: 'output_port', id: outId, pinIndex: 0, isOutput: false, x: pinPos.x, y: pinPos.y };
+      bestDist = dist;
+    }
+  }
+
+  // 3. Check gate pins (tighter tolerance since gate input pins are close together)
+  for (let gate of state.sandbox.gates) {
+    // Output pin
+    const outPos = getPinPosition('gate', gate.id, 'out');
+    const outDist = Math.hypot(pos.x - outPos.x, pos.y - outPos.y);
+    if (outDist <= gateOutTolerance && outDist < bestDist) {
+      bestPin = { type: 'gate', id: gate.id, pinIndex: 0, isOutput: true, x: outPos.x, y: outPos.y };
+      bestDist = outDist;
+    }
+    // Input 0
+    const in0Pos = getPinPosition('gate', gate.id, 0);
+    const in0Dist = Math.hypot(pos.x - in0Pos.x, pos.y - in0Pos.y);
+    if (in0Dist <= gateInTolerance && in0Dist < bestDist) {
+      bestPin = { type: 'gate', id: gate.id, pinIndex: 0, isOutput: false, x: in0Pos.x, y: in0Pos.y };
+      bestDist = in0Dist;
+    }
+    // Input 1
+    const in1Pos = getPinPosition('gate', gate.id, 1);
+    const in1Dist = Math.hypot(pos.x - in1Pos.x, pos.y - in1Pos.y);
+    if (in1Dist <= gateInTolerance && in1Dist < bestDist) {
+      bestPin = { type: 'gate', id: gate.id, pinIndex: 1, isOutput: false, x: in1Pos.x, y: in1Pos.y };
+      bestDist = in1Dist;
+    }
+  }
+
+  return bestPin;
+}
+
+function getGateAtPosition(pos) {
+  for (let gate of state.sandbox.gates) {
+    if (pos.x >= gate.x && pos.x <= gate.x + gate.width &&
+        pos.y >= gate.y && pos.y <= gate.y + gate.height) {
+      return gate;
+    }
+  }
+  return null;
+}
+
+// Distance from point to bezier line to delete wires
+function getWireAtPosition(pos) {
+  const clickTolerance = 6;
+  for (let wire of state.sandbox.wires) {
+    const p1 = getPinPosition(wire.fromNode.type, wire.fromNode.id, wire.fromNode.type === 'gate' ? 'out' : 0);
+    const p2 = getPinPosition(wire.toNode.type, wire.toNode.id, wire.toNode.pinIndex);
+    
+    // Midpoint check as simple distance approximation
+    const midX = (p1.x + p2.x) / 2;
+    const midY = (p1.y + p2.y) / 2;
+    if (Math.hypot(pos.x - midX, pos.y - midY) <= clickTolerance + 15) {
+      return wire;
+    }
+  }
+  return null;
+}
+
+// Drag & drop mousedown handling
+function onSandboxMouseDown(e) {
+  const pos = getMouseCoordinates(e);
+
+  // 0. Check if clicked an input toggle box area (to change input 0/1 state)
+  const isFA = (state.sandbox.mission === 'fa');
+  if (pos.x >= 0 && pos.x <= 55) {
+    let toggled = false;
+    if (Math.abs(pos.y - 120) <= 22) {
+      state.sandbox.a = state.sandbox.a ? 0 : 1;
+      toggled = true;
+    } else if (Math.abs(pos.y - 240) <= 22) {
+      state.sandbox.b = state.sandbox.b ? 0 : 1;
+      toggled = true;
+    } else if (isFA && Math.abs(pos.y - 360) <= 22) {
+      state.sandbox.bin = state.sandbox.bin ? 0 : 1;
+      toggled = true;
+    }
+    
+    if (toggled) {
+      logClick();
+      playSound('click');
+      evaluateSandboxCircuit();
+      drawSandbox();
+      return;
+    }
+  }
+
+  logClick();
+
+  // 1. Check if clicked a connector pin to start drawing a wire
+  const pin = getPinAtPosition(pos);
+  if (pin && pin.isOutput) {
+    state.sandbox.connectingPin = pin;
+    state.sandbox.selectedGate = null;
+    state.sandbox.selectedWire = null;
+    const wrapper = document.querySelector('.sandbox-canvas-wrapper');
+    if (wrapper) wrapper.classList.add('dragging');
+    drawSandbox();
+    return;
+  }
+
+  // 2. Check if clicked on a gate to select/drag
+  const gate = getGateAtPosition(pos);
+  if (gate) {
+    state.sandbox.draggingGate = gate;
+    state.sandbox.selectedGate = gate;
+    state.sandbox.selectedWire = null;
+    state.sandbox.dragOffset.x = pos.x - gate.x;
+    state.sandbox.dragOffset.y = pos.y - gate.y;
+    const wrapper = document.querySelector('.sandbox-canvas-wrapper');
+    if (wrapper) wrapper.classList.add('dragging');
+    document.getElementById('btn-delete-selected').classList.remove('disabled');
+    document.getElementById('btn-delete-selected').disabled = false;
+    drawSandbox();
+    return;
+  }
+
+  // 3. Check if clicked a wire path
+  const wire = getWireAtPosition(pos);
+  if (wire) {
+    state.sandbox.selectedWire = wire;
+    state.sandbox.selectedGate = null;
+    document.getElementById('btn-delete-selected').classList.remove('disabled');
+    document.getElementById('btn-delete-selected').disabled = false;
+    drawSandbox();
+    return;
+  }
+
+  // 4. Tap-to-place check
+  console.log(`[DEBUG_MOUSEDOWN] selectedPaletteType=${state.sandbox.selectedPaletteType} pos.x=${pos.x} pos.y=${pos.y}`);
+  if (state.sandbox.selectedPaletteType) {
+    addGateToSandbox(state.sandbox.selectedPaletteType, pos.x, pos.y);
+    state.sandbox.selectedPaletteType = null;
+    document.querySelectorAll('.palette-item').forEach(el => el.classList.remove('selected-palette-item'));
+    return;
+  }
+
+  // Deselect all
+  state.sandbox.selectedGate = null;
+  state.sandbox.selectedWire = null;
+  document.getElementById('btn-delete-selected').classList.add('disabled');
+  document.getElementById('btn-delete-selected').disabled = true;
+  drawSandbox();
+}
+
+function onSandboxMouseMove(e) {
+  const pos = getMouseCoordinates(e);
+  state.sandbox.mousePos = pos;
+  document.getElementById('canvas-coordinates').innerText = `X: ${Math.round(pos.x)}, Y: ${Math.round(pos.y)}`;
+
+  // Set cursor feedback dynamically
+  let cursorStyle = 'default';
+  if (state.sandbox.draggingGate || state.sandbox.connectingPin) {
+    cursorStyle = state.sandbox.draggingGate ? 'grabbing' : 'crosshair';
+  } else {
+    const pin = getPinAtPosition(pos);
+    const gate = getGateAtPosition(pos);
+    const isFA = (state.sandbox.mission === 'fa');
+    // Check if hovering over input toggle boxes (x <= 55)
+    const isOverToggle = pos.x >= 0 && pos.x <= 55 && (
+      Math.abs(pos.y - 120) <= 22 || 
+      Math.abs(pos.y - 240) <= 22 || 
+      (isFA && Math.abs(pos.y - 360) <= 22)
+    );
+    
+    if (pin || gate || isOverToggle) {
+      cursorStyle = gate ? 'grab' : 'pointer';
+    }
+  }
+  if (sandboxCanvas) {
+    sandboxCanvas.style.cursor = cursorStyle;
+  }
+
+  // Moving a gate on the grid workspace
+  if (state.sandbox.draggingGate) {
+    const newX = Math.round((pos.x - state.sandbox.dragOffset.x) / GRID_SIZE) * GRID_SIZE;
+    const newY = Math.round((pos.y - state.sandbox.dragOffset.y) / GRID_SIZE) * GRID_SIZE;
+    
+    // Bounds restrict
+    state.sandbox.draggingGate.x = Math.max(80, Math.min(sandboxCanvas.width - 150, newX));
+    state.sandbox.draggingGate.y = Math.max(20, Math.min(sandboxCanvas.height - 60, newY));
+    
+    evaluateSandboxCircuit();
+    drawSandbox();
+  }
+
+  // Refresh drawing when dragging connections
+  if (state.sandbox.connectingPin) {
+    drawSandbox();
+  }
+}
+
+function onSandboxMouseUp(e) {
+  const wrapper = document.querySelector('.sandbox-canvas-wrapper');
+  if (wrapper) wrapper.classList.remove('dragging');
+
+  if (state.sandbox.draggingGate) {
+    state.sandbox.draggingGate = null;
+    playSound('click');
+    drawSandbox();
+  }
+
+  if (state.sandbox.connectingPin) {
+    const pos = getMouseCoordinates(e);
+    const targetPin = getPinAtPosition(pos);
+
+    // Connect wire if released over a compatible input pin
+    if (targetPin && !targetPin.isOutput) {
+      // Pin compatibility check (avoid shorting logic)
+      const exists = state.sandbox.wires.find(w => 
+        w.toNode.type === targetPin.type && 
+        w.toNode.id === targetPin.id && 
+        w.toNode.pinIndex === targetPin.pinIndex
+      );
+
+      if (!exists) {
+        const wireId = 'wire_' + Date.now();
+        const newWire = {
+          id: wireId,
+          fromNode: {
+            type: state.sandbox.connectingPin.type,
+            id: state.sandbox.connectingPin.id,
+            pinIndex: state.sandbox.connectingPin.pinIndex
+          },
+          toNode: {
+            type: targetPin.type,
+            id: targetPin.id,
+            pinIndex: targetPin.pinIndex
+          }
+        };
+
+        state.sandbox.wires.push(newWire);
+        playSound('click');
+        evaluateSandboxCircuit();
+      }
+    }
+    state.sandbox.connectingPin = null;
+    drawSandbox();
+  }
+}
+
+// Touch support wrapper functions for mobile devices
+function onSandboxTouchStart(e) {
+  if (e.touches && e.touches.length > 1) {
+    // Abort active drag/wire drawing so pinch-zoom gesture works cleanly
+    state.sandbox.draggingGate = null;
+    state.sandbox.connectingPin = null;
+    const wrapper = document.querySelector('.sandbox-canvas-wrapper');
+    if (wrapper) wrapper.classList.remove('dragging');
+    return;
+  }
+
+  if (e.touches && e.touches.length === 1) {
+    // Always prevent default on single-finger touch to stop browser
+    // from consuming the gesture as scroll/pan, which blocks gate
+    // placement and dragging on mobile devices.
+    e.preventDefault();
+    onSandboxMouseDown(e);
+  }
+}
+
+function onSandboxTouchMove(e) {
+  if (e.touches && e.touches.length > 1) {
+    return;
+  }
+
+  if (e.touches && e.touches.length === 1) {
+    // Always prevent default to stop page scrolling while finger
+    // is moving on the canvas (dragging gates, drawing wires, etc.)
+    e.preventDefault();
+    onSandboxMouseMove(e);
+  }
+}
+
+function onSandboxTouchEnd(e) {
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    const synthEvent = {
+      clientX: e.changedTouches[0].clientX,
+      clientY: e.changedTouches[0].clientY,
+      touches: e.changedTouches
+    };
+    onSandboxMouseUp(synthEvent);
+  } else {
+    onSandboxMouseUp(e);
+  }
+}
+
+// RENDER FUNCTION FOR SANDBOX CANVAS
+function drawSandbox() {
+  if (!sandboxCtx) return;
+  
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  
+  const theme = {
+    bgDark: isLight ? '#ffffff' : '#080b15',
+    bgPanel: isLight ? '#f7f8fa' : '#111827',
+    borderColor: isLight ? '#d8dbe0' : '#374151',
+    signalLow: isLight ? '#d5d9e0' : '#2b3648',
+    accentAmber: isLight ? '#b45309' : '#ff9f1c',
+    accentCyan: isLight ? '#0284c7' : '#00d2ff',
+    textBright: isLight ? '#10141c' : '#f8fafc',
+    textMuted: isLight ? '#6b7280' : '#9ca3af',
+  };
+  
+  // Clear
+  sandboxCtx.fillStyle = theme.bgDark;
+  sandboxCtx.fillRect(0, 0, sandboxCanvas.width, sandboxCanvas.height);
+
+  // Draw grid background dots
+  sandboxCtx.fillStyle = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.03)';
+  for (let x = GRID_SIZE; x < sandboxCanvas.width; x += GRID_SIZE) {
+    for (let y = GRID_SIZE; y < sandboxCanvas.height; y += GRID_SIZE) {
+      sandboxCtx.beginPath();
+      sandboxCtx.arc(x, y, 1, 0, Math.PI * 2);
+      sandboxCtx.fill();
+    }
+  }
+
+  // Draw Wires (bezier curves)
+  state.sandbox.wires.forEach(wire => {
+    const p1 = getPinPosition(wire.fromNode.type, wire.fromNode.id, wire.fromNode.type === 'gate' ? 'out' : 0);
+    const p2 = getPinPosition(wire.toNode.type, wire.toNode.id, wire.toNode.pinIndex);
+
+    const isSelected = state.sandbox.selectedWire === wire;
+    
+    // Evaluate active status of wire line
+    let wireActive = 0;
+    if (wire.fromNode.type === 'input_port') {
+      wireActive = state.sandbox[wire.fromNode.id];
+    } else if (wire.fromNode.type === 'gate') {
+      const g = state.sandbox.gates.find(item => item.id === wire.fromNode.id);
+      if (g) wireActive = g.output.v;
+    }
+
+    // Bezier control coordinate adjustments
+    sandboxCtx.beginPath();
+    sandboxCtx.moveTo(p1.x, p1.y);
+    sandboxCtx.bezierCurveTo(p1.x + 50, p1.y, p2.x - 50, p2.y, p2.x, p2.y);
+    
+    if (wireActive) {
+      // 1. Draw glowing background shadow (wide solid amber)
+      sandboxCtx.strokeStyle = isLight ? 'rgba(180, 83, 9, 0.15)' : 'rgba(255, 159, 28, 0.25)';
+      sandboxCtx.lineWidth = 6;
+      sandboxCtx.stroke();
+      
+      // 2. Draw solid amber core wire
+      sandboxCtx.strokeStyle = isSelected ? theme.accentCyan : theme.accentAmber;
+      sandboxCtx.lineWidth = isSelected ? 3.5 : 2.5;
+      sandboxCtx.stroke();
+
+      // 3. Draw moving bright signal dashes
+      sandboxCtx.save();
+      sandboxCtx.strokeStyle = isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.9)'; // bright signal pulses
+      sandboxCtx.lineWidth = isSelected ? 3.0 : 2.0;
+      sandboxCtx.setLineDash([8, 12]); // 8px pulse, 12px gap
+      sandboxCtx.lineDashOffset = -((Date.now() / 30) % 20); // scroll direction (flowing forward)
+      sandboxCtx.stroke();
+      sandboxCtx.restore();
+    } else {
+      // Inactive wire
+      sandboxCtx.strokeStyle = isSelected ? theme.accentCyan : theme.signalLow;
+      sandboxCtx.lineWidth = isSelected ? 3.5 : 2.5;
+      sandboxCtx.stroke();
+    }
+  });
+
+  // Draw current live wire connection being drawn by user
+  if (state.sandbox.connectingPin) {
+    const p1 = { x: state.sandbox.connectingPin.x, y: state.sandbox.connectingPin.y };
+    const p2 = state.sandbox.mousePos;
+
+    sandboxCtx.beginPath();
+    sandboxCtx.moveTo(p1.x, p1.y);
+    sandboxCtx.bezierCurveTo(p1.x + 50, p1.y, p2.x - 50, p2.y, p2.x, p2.y);
+    sandboxCtx.strokeStyle = theme.accentCyan;
+    sandboxCtx.lineWidth = 2;
+    sandboxCtx.setLineDash([6, 6]);
+    sandboxCtx.lineDashOffset = -((Date.now() / 20) % 12);
+    sandboxCtx.stroke();
+    sandboxCtx.setLineDash([]); // Reset
+  }
+
+  // Draw global input/output connector nodes
+  // Local helper to draw rounded rectangles on the canvas
+  function drawRoundedRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+  }
+
+  // Draw global input/output connector nodes
+  const isFA = (state.sandbox.mission === 'fa');
+  const inNames = isFA ? ['a', 'b', 'bin'] : ['a', 'b'];
+  inNames.forEach(inId => {
+    const pos = getPinPosition('input_port', inId);
+    
+    // 1. Draw connection pin circle (at x = 30)
+    sandboxCtx.beginPath();
+    sandboxCtx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
+    sandboxCtx.fillStyle = state.sandbox[inId] ? theme.accentAmber : theme.signalLow;
+    sandboxCtx.fill();
+    sandboxCtx.strokeStyle = isLight ? theme.borderColor : '#fff';
+    sandboxCtx.lineWidth = 1.5;
+    sandboxCtx.stroke();
+
+    // 2. Draw interactive toggle box (rounded rect to the left)
+    const boxX = 8;
+    const boxY = pos.y - 9;
+    const boxW = 18;
+    const boxH = 18;
+    
+    sandboxCtx.fillStyle = state.sandbox[inId] ? theme.accentAmber : (isLight ? '#eef0f3' : '#1f2937');
+    drawRoundedRect(sandboxCtx, boxX, boxY, boxW, boxH, 4);
+    sandboxCtx.fill();
+    
+    sandboxCtx.strokeStyle = state.sandbox[inId] ? (isLight ? theme.accentAmber : '#fff') : (isLight ? '#d8dbe0' : '#4b5563');
+    sandboxCtx.lineWidth = 1;
+    sandboxCtx.stroke();
+
+    // Draw value text inside the box
+    sandboxCtx.fillStyle = state.sandbox[inId] ? (isLight ? '#fff' : '#0a0e1a') : theme.textBright;
+    sandboxCtx.font = 'bold 10px JetBrains Mono, monospace';
+    sandboxCtx.textAlign = 'center';
+    sandboxCtx.textBaseline = 'middle';
+    sandboxCtx.fillText(state.sandbox[inId] ? '1' : '0', boxX + boxW / 2, boxY + boxH / 2 + 1);
+
+    // Draw label text above the box
+    sandboxCtx.fillStyle = theme.textMuted;
+    sandboxCtx.font = '9px JetBrains Mono, monospace';
+    sandboxCtx.fillText(inId.toUpperCase(), boxX + boxW / 2, boxY - 7);
+  });
+
+  const outNames = ['difference', 'borrow'];
+  outNames.forEach(outId => {
+    const pos = getPinPosition('output_port', outId);
+    
+    // 1. Draw connection pin circle (at x = 670)
+    sandboxCtx.beginPath();
+    sandboxCtx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
+    sandboxCtx.fillStyle = theme.bgDark;
+    sandboxCtx.fill();
+    sandboxCtx.strokeStyle = theme.borderColor;
+    sandboxCtx.lineWidth = 1.5;
+    sandboxCtx.stroke();
+
+    // 2. Draw LED bulb to the right (at x = 684)
+    const ledX = 684;
+    const ledY = pos.y;
+    const ledR = 8;
+    const val = (state.sandbox.outputs && state.sandbox.outputs[outId]) || 0;
+    
+    sandboxCtx.beginPath();
+    sandboxCtx.arc(ledX, ledY, ledR, 0, Math.PI * 2);
+    if (val) {
+      const grad = sandboxCtx.createRadialGradient(ledX - 2, ledY - 2, 1, ledX, ledY, ledR);
+      if (isLight) {
+        grad.addColorStop(0, '#a7f3d0'); // mint green center
+        grad.addColorStop(1, '#047857'); // dark green border
+      } else {
+        grad.addColorStop(0, '#a7f3d0');
+        grad.addColorStop(1, '#059669');
+      }
+      sandboxCtx.fillStyle = grad;
+    } else {
+      sandboxCtx.fillStyle = isLight ? '#eef0f3' : '#1f2937';
+    }
+    sandboxCtx.fill();
+    
+    sandboxCtx.strokeStyle = val ? (isLight ? '#047857' : '#fff') : (isLight ? '#d8dbe0' : '#4b5563');
+    sandboxCtx.lineWidth = 1.5;
+    sandboxCtx.stroke();
+
+    // Draw label text above the LED
+    sandboxCtx.fillStyle = theme.textMuted;
+    sandboxCtx.font = '9px JetBrains Mono, monospace';
+    sandboxCtx.textAlign = 'center';
+    sandboxCtx.textBaseline = 'middle';
+    sandboxCtx.fillText(outId.toUpperCase(), ledX, ledY - 15);
+  });
+
+  // Draw placed logic Gates on the grid
+  state.sandbox.gates.forEach(gate => {
+    const isSelected = state.sandbox.selectedGate === gate;
+    
+    // Distinct aesthetic themes for different gate types
+    let bg = isLight ? '#f7f8fa' : '#111827';
+    let border = isLight ? '#d8dbe0' : '#374151';
+    let textCol = theme.textBright;
+    
+    if (gate.type === 'AND') {
+      bg = isLight ? '#eff6ff' : '#112240'; // Steel blue
+      border = isSelected ? theme.accentAmber : (isLight ? '#3b82f6' : '#3b82f6');
+      textCol = isLight ? '#1d4ed8' : '#93c5fd';
+    } else if (gate.type === 'OR') {
+      bg = isLight ? '#fdf2f8' : '#2d1a22'; // Burgundy
+      border = isSelected ? theme.accentAmber : (isLight ? '#ec4899' : '#ec4899');
+      textCol = isLight ? '#be185d' : '#f9a8d4';
+    } else if (gate.type === 'XOR') {
+      bg = isLight ? '#ecfeff' : '#162e2d'; // Teal
+      border = isSelected ? theme.accentAmber : (isLight ? '#06b6d4' : '#06b6d4');
+      textCol = isLight ? '#0891b2' : '#67e8f9';
+    }
+
+    if (isSelected && border !== theme.accentAmber) {
+      border = theme.accentCyan; // Selected cyan highlight
+    }
+
+    // Draw gate body block
+    sandboxCtx.fillStyle = bg;
+    sandboxCtx.strokeStyle = border;
+    sandboxCtx.lineWidth = isSelected ? 2.5 : 1.5;
+    
+    // Glow effect for active gates
+    if (gate.output.v === 1) {
+      sandboxCtx.shadowColor = border;
+      sandboxCtx.shadowBlur = isLight ? 4 : 8; // Softer glow in light mode
+    }
+    
+    // Draw rounded block rectangle representation
+    sandboxCtx.beginPath();
+    sandboxCtx.roundRect(gate.x, gate.y, gate.width, gate.height, 6);
+    sandboxCtx.fill();
+    sandboxCtx.stroke();
+    sandboxCtx.shadowBlur = 0; // Reset
+
+    // Gate title text
+    sandboxCtx.fillStyle = textCol;
+    sandboxCtx.font = 'bold 11px "JetBrains Mono", Courier, monospace';
+    sandboxCtx.textAlign = 'center';
+    sandboxCtx.textBaseline = 'middle';
+    sandboxCtx.fillText(gate.type, gate.x + 30, gate.y + 20);
+
+    // Draw Input connection nodes (circles)
+    [0, 1].forEach(idx => {
+      const pinPos = getPinPosition('gate', gate.id, idx);
+      sandboxCtx.beginPath();
+      sandboxCtx.arc(pinPos.x, pinPos.y, 5, 0, Math.PI * 2);
+      sandboxCtx.fillStyle = gate.inputs[idx].v ? theme.accentAmber : theme.bgDark;
+      sandboxCtx.fill();
+      sandboxCtx.strokeStyle = theme.borderColor;
+      sandboxCtx.lineWidth = 1;
+      sandboxCtx.stroke();
+    });
+
+    // Draw Output node
+    const outPos = getPinPosition('gate', gate.id, 'out');
+    sandboxCtx.beginPath();
+    sandboxCtx.arc(outPos.x, outPos.y, 5, 0, Math.PI * 2);
+    sandboxCtx.fillStyle = gate.output.v ? theme.accentAmber : theme.bgDark;
+    sandboxCtx.fill();
+    sandboxCtx.strokeStyle = theme.borderColor;
+    sandboxCtx.lineWidth = 1;
+    sandboxCtx.stroke();
+  });
+}
+
+// Tool events inside Sandbox Panel
+function initSandboxTools() {
+  updatePaletteDraggables();
+  
+  const btnClear = document.getElementById('btn-clear-sandbox');
+  const btnDelete = document.getElementById('btn-delete-selected');
+  const missionHA = document.getElementById('btn-mission-ha');
+  const missionFA = document.getElementById('btn-mission-fa');
+  const btnSuccessClose = document.getElementById('btn-sandbox-success-close');
+
+  btnClear.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    resetSandboxElements();
+    drawSandbox();
+  });
+
+  btnDelete.addEventListener('click', () => {
+    logClick();
+    if (state.sandbox.selectedGate) {
+      // Remove selected gate and all connected wires
+      const gId = state.sandbox.selectedGate.id;
+      state.sandbox.gates = state.sandbox.gates.filter(g => g.id !== gId);
+      state.sandbox.wires = state.sandbox.wires.filter(w => 
+        !(w.fromNode.type === 'gate' && w.fromNode.id === gId) && 
+        !(w.toNode.type === 'gate' && w.toNode.id === gId)
+      );
+      state.sandbox.selectedGate = null;
+      playSound('incorrect');
+    } else if (state.sandbox.selectedWire) {
+      const wId = state.sandbox.selectedWire.id;
+      state.sandbox.wires = state.sandbox.wires.filter(w => w.id !== wId);
+      state.sandbox.selectedWire = null;
+      playSound('incorrect');
+    }
+
+    btnDelete.classList.add('disabled');
+    btnDelete.disabled = true;
+    evaluateSandboxCircuit();
+    drawSandbox();
+  });
+
+  missionHA.addEventListener('click', () => {
+    logClick();
+    state.sandbox.mission = 'ha';
+    missionHA.classList.add('active');
+    missionFA.classList.remove('active');
+    document.getElementById('sandbox-goal-text').innerHTML = 'Construct a working <strong>Half Subtractor</strong>! Place gates on the grid and wire inputs to outputs. Complete the truth table to unlock.';
+    playSound('click');
+    resetSandboxElements();
+    updateSandboxSidepanels();
+    drawSandbox();
+  });
+
+  missionFA.addEventListener('click', () => {
+    logClick();
+    state.sandbox.mission = 'fa';
+    missionFA.classList.add('active');
+    missionHA.classList.remove('active');
+    document.getElementById('sandbox-goal-text').innerHTML = 'Construct a working <strong>Full Subtractor</strong>! Connect inputs A, B, and B<sub>in</sub> to DIFFERENCE and BORROW outputs.';
+    playSound('click');
+    resetSandboxElements();
+    updateSandboxSidepanels();
+    drawSandbox();
+  });
+
+  btnSuccessClose.addEventListener('click', () => {
+    logClick();
+    document.getElementById('sandbox-success-overlay').classList.add('hidden');
+    playSound('click');
+  });
+
+  // Fullscreen Landscape Toggle for Sandbox Module
+  const btnFullscreen = document.getElementById('btn-sandbox-fullscreen');
+  if (btnFullscreen) {
+    btnFullscreen.addEventListener('click', () => {
+      logClick();
+      playSound('click');
+      const sandbox = document.getElementById('module-sandbox');
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (sandbox.requestFullscreen) {
+          sandbox.requestFullscreen().then(() => {
+            if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('landscape').catch(err => console.log('Orientation lock error:', err));
+            }
+          }).catch(err => console.log('Fullscreen error:', err));
+        } else if (sandbox.webkitRequestFullscreen) {
+          sandbox.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+    });
+  }
+
+  // Fullscreen change events
+  document.removeEventListener('fullscreenchange', onSandboxFullscreenChange);
+  document.addEventListener('fullscreenchange', onSandboxFullscreenChange);
+  document.removeEventListener('webkitfullscreenchange', onSandboxFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onSandboxFullscreenChange);
+}
+
+function onSandboxFullscreenChange() {
+  const sandbox = document.getElementById('module-sandbox');
+  const btn = document.getElementById('btn-sandbox-fullscreen');
+  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  
+  if (sandbox) {
+    if (isFs && (document.fullscreenElement === sandbox || document.webkitFullscreenElement === sandbox)) {
+      sandbox.classList.add('sandbox-fullscreen-mode');
+      if (btn) btn.innerText = 'Exit Fullscreen';
+    } else {
+      sandbox.classList.remove('sandbox-fullscreen-mode');
+      if (btn) btn.innerText = '📱 Fullscreen';
+      if (screen.orientation && screen.orientation.unlock) {
+        screen.orientation.unlock().catch(() => {});
+      }
+    }
+
+    // Re-initialize canvas after layout settles (100ms debounce)
+    setTimeout(() => {
+      if (sandboxCanvas) {
+        // Re-bind touch listeners (they can detach after DOM re-parenting in fullscreen)
+        sandboxCanvas.removeEventListener('touchstart', onSandboxTouchStart);
+        sandboxCanvas.addEventListener('touchstart', onSandboxTouchStart, { passive: false });
+        sandboxCanvas.removeEventListener('touchmove', onSandboxTouchMove);
+        sandboxCanvas.addEventListener('touchmove', onSandboxTouchMove, { passive: false });
+        window.removeEventListener('touchend', onSandboxTouchEnd);
+        window.addEventListener('touchend', onSandboxTouchEnd);
+        
+        sandboxCanvas.removeEventListener('mousedown', onSandboxMouseDown);
+        sandboxCanvas.addEventListener('mousedown', onSandboxMouseDown);
+        sandboxCanvas.removeEventListener('mousemove', onSandboxMouseMove);
+        sandboxCanvas.addEventListener('mousemove', onSandboxMouseMove);
+        window.removeEventListener('mouseup', onSandboxMouseUp);
+        window.addEventListener('mouseup', onSandboxMouseUp);
+
+        drawSandbox();
+      }
+    }, 150);
+  }
+}
+
+// MODULE 5: 4-BIT RIPPLE BORROW LAB
+function initRippleCarryModule() {
+  const speedEl = document.getElementById('ripple-speed');
+  const btnRun = document.getElementById('btn-ripple-calculate');
+
+  // Speed selection update
+  speedEl.addEventListener('change', () => {
+    logClick();
+    state.ripple.delay = parseInt(speedEl.value);
+    playSound('click');
+  });
+
+  // Generate binary switches
+  const nibbles = ['a', 'b'];
+  nibbles.forEach(nibble => {
+    for (let i = 0; i < 4; i++) {
+      const btn = document.getElementById(`btn-${nibble}${i}`);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          logClick();
+          if (state.ripple.animating) return; // Prevent change during active animation
+          const val = state.ripple[nibble][i] ? 0 : 1;
+          state.ripple[nibble][i] = val;
+          btn.innerText = val;
+          btn.classList.toggle('active', val === 1);
+          playSound('click');
+          updateRippleStaticUI();
+        });
+      }
+    }
+  });
+
+  btnRun.addEventListener('click', () => {
+    logClick();
+    runRippleAnimation();
+  });
+
+  updateRippleStaticUI();
+}
+
+function updateRippleStaticUI() {
+  // Convert binary array to string representations (reversing LSB-first array to MSB-first string)
+  const binA = [...state.ripple.a].reverse().join('');
+  const binB = [...state.ripple.b].reverse().join('');
+  const decA = parseInt(binA, 2);
+  const decB = parseInt(binB, 2);
+
+  document.getElementById('formula-bin-a').innerText = `${binA}₂`;
+  document.getElementById('formula-bin-b').innerText = `${binB}₂`;
+  document.getElementById('formula-dec-a').innerText = `(${decA})`;
+  document.getElementById('formula-dec-b').innerText = `(${decB})`;
+
+  // Instantly resolve display if not animating
+  if (!state.ripple.animating) {
+    const diffVal = decA + decB;
+    const binSum = diffVal.toString(2).padStart(5, '0');
+    
+    document.getElementById('formula-bin-difference').innerText = `${binSum}₂`;
+    document.getElementById('formula-dec-difference').innerText = `(${diffVal})`;
+    
+    // LEDs matching LSB -> MSB
+    const bits = binSum.split('').reverse(); // index 0 = S0
+    for (let i = 0; i < 4; i++) {
+      const bitVal = parseInt(bits[i] || '0');
+      document.getElementById(`rc-led-d${i}`).classList.toggle('active', bitVal === 1);
+    }
+    
+    // Overflow bit C4
+    const ovVal = parseInt(bits[4] || '0');
+    document.getElementById('rc-led-b4').classList.toggle('active', ovVal === 1);
+    document.getElementById('ripple-overflow-alert').classList.toggle('hidden', ovVal === 0);
+  }
+}
+
+// Scheduled delay animator for Ripple Borrow borrow-bits
+function runRippleAnimation() {
+  if (state.ripple.animating) return;
+  state.ripple.animating = true;
+  document.getElementById('btn-ripple-calculate').disabled = true;
+
+  // Clear pending timers
+  state.ripple.timeoutIds.forEach(clearTimeout);
+  state.ripple.timeoutIds = [];
+
+  // Reset visual stages
+  const stages = document.querySelectorAll('.ripple-stage');
+  stages.forEach(s => s.classList.remove('active-stage'));
+
+  // Reset active wire highlights
+  const wiresToReset = [
+    'rc-borrow-wire-0-1', 'rc-borrow-wire-1-2', 'rc-borrow-wire-2-3', 'rc-borrow-wire-3-ov',
+    'rc-s0-wire', 'rc-s1-wire', 'rc-s2-wire', 'rc-s3-wire'
+  ];
+  wiresToReset.forEach(wId => {
+    document.getElementById(wId).classList.remove('active');
+    document.getElementById(wId).classList.remove('bin-active');
+  });
+
+  const pulsesToHide = [
+    'rc-borrow-pulse-0-1', 'rc-borrow-pulse-1-2', 'rc-borrow-pulse-2-3', 'rc-borrow-pulse-3-ov'
+  ];
+  pulsesToHide.forEach(pId => document.getElementById(pId).classList.add('hidden'));
+
+  const ledsToReset = ['rc-led-d0', 'rc-led-d1', 'rc-led-d2', 'rc-led-d3', 'rc-led-b4'];
+  ledsToReset.forEach(led => document.getElementById(led).classList.remove('active'));
+
+  // Propagation execution scheduler
+  let currentBorrow = 0;
+  const A = [...state.ripple.a]; // A[0] is LSB
+  const B = [...state.ripple.b]; // B[0] is LSB
+
+  const delayStep = state.ripple.delay;
+
+  function processStage(stageIdx) {
+    if (stageIdx > 3) {
+      // Done propagation
+      const finalDiff = parseInt([...state.ripple.a].reverse().join(''), 2) + parseInt([...state.ripple.b].reverse().join(''), 2);
+      const binSum = finalDiff.toString(2).padStart(5, '0');
+      document.getElementById('formula-bin-difference').innerText = `${binSum}₂`;
+      document.getElementById('formula-dec-difference').innerText = `(${finalDiff})`;
+      
+      // Animate borrow-out/overflow path
+      if (currentBorrow === 1) {
+        document.getElementById('rc-borrow-wire-3-ov').classList.add('active');
+        document.getElementById('rc-borrow-pulse-3-ov').classList.remove('hidden');
+        document.getElementById('rc-led-b4').classList.add('active');
+        document.getElementById('ripple-overflow-alert').classList.remove('hidden');
+      }
+
+      state.ripple.animating = false;
+      document.getElementById('btn-ripple-calculate').disabled = false;
+      completeModule('module-ripple-borrow');
+      return;
+    }
+
+    // Activate current Stage card
+    document.getElementById(`rc-stage-${stageIdx}`).classList.add('active-stage');
+    playSound('ripple');
+
+    // Calculate difference & borrow-out for this column
+    const aVal = A[stageIdx];
+    const bVal = B[stageIdx];
+    const diffOut = aVal ^ bVal ^ currentBorrow;
+    const nextBorrow = (aVal & bVal) | (currentBorrow & (aVal ^ bVal));
+
+    // LED glow difference output node for this column
+    if (diffOut === 1) {
+      document.getElementById(`rc-s${stageIdx}-wire`).classList.add('active');
+      document.getElementById(`rc-led-d${stageIdx}`).classList.add('active');
+    }
+
+    // Schedule borrow-out wire glow & propagation to the next column
+    if (stageIdx < 3) {
+      const nextTimer = setTimeout(() => {
+        // Toggle borrow wire active color before calculation starts
+        if (nextBorrow === 1) {
+          document.getElementById(`rc-borrow-wire-${stageIdx}-${stageIdx+1}`).classList.add('bin-active');
+          document.getElementById(`rc-borrow-pulse-${stageIdx}-${stageIdx+1}`).classList.remove('hidden');
+        }
+        
+        currentBorrow = nextBorrow;
+        // Proceed recursively
+        processStage(stageIdx + 1);
+      }, delayStep);
+      state.ripple.timeoutIds.push(nextTimer);
+    } else {
+      // final stage borrow-out evaluation
+      currentBorrow = nextBorrow;
+      const finalTimer = setTimeout(() => {
+        processStage(4);
+      }, delayStep);
+      state.ripple.timeoutIds.push(finalTimer);
+    }
+  }
+
+  // Start with column Stage 0 (LSB)
+  processStage(0);
+}
+
+// MODULE 6: PHYSICAL BREADBOARD INTERACTIVITY
+function initBreadboardModule() {
+  const switchHaA = document.getElementById('bb-hs-switch-a-knob');
+  const switchHaB = document.getElementById('bb-hs-switch-b-knob');
+  const switchFaA = document.getElementById('bb-fs-switch-a-knob');
+  const switchFaB = document.getElementById('bb-fs-switch-b-knob');
+  const switchFaCin = document.getElementById('bb-fs-switch-bin-knob');
+  
+  const btnA = document.getElementById('bb-btn-switch-a');
+  const btnB = document.getElementById('bb-btn-switch-b');
+  const btnCin = document.getElementById('bb-btn-switch-bin');
+
+  const btnViewHa = document.getElementById('btn-bb-view-ha');
+  const btnViewFa = document.getElementById('btn-bb-view-fa');
+  const svgHa = document.getElementById('breadboard-hs-svg');
+  const svgFa = document.getElementById('breadboard-fs-svg');
+  const bbLabTitle = document.getElementById('bb-lab-title');
+  const bbInfoOr = document.getElementById('bb-info-or');
+
+  // Toggle view between Half Subtractor and Full Subtractor breadboards
+  btnViewHa.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    state.breadboard.view = 'ha';
+    btnViewHa.classList.add('active');
+    btnViewFa.classList.remove('active');
+    svgHa.classList.remove('hidden');
+    svgFa.classList.add('hidden');
+    btnCin.classList.add('hidden');
+    bbInfoOr.classList.add('hidden');
+    bbLabTitle.innerText = "Breadboard Lab (Half Subtractor Mapping)";
+    updateBreadboard();
+  });
+
+  btnViewFa.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    state.breadboard.view = 'fa';
+    btnViewHa.classList.remove('active');
+    btnViewFa.classList.add('active');
+    svgHa.classList.add('hidden');
+    svgFa.classList.remove('hidden');
+    btnCin.classList.remove('hidden');
+    bbInfoOr.classList.remove('hidden');
+    bbLabTitle.innerText = "Breadboard Lab (Full Subtractor Mapping)";
+    updateBreadboard();
+  });
+
+  function updateBreadboard() {
+    const a = state.breadboard.a;
+    const b = state.breadboard.b;
+    const bin = state.breadboard.bin;
+    const view = state.breadboard.view;
+
+    // Update button states
+    btnA.innerText = `Toggle Switch A (${a})`;
+    btnA.classList.toggle('primary', a === 1);
+    btnA.classList.toggle('secondary', a === 0);
+    
+    btnB.innerText = `Toggle Switch B (${b})`;
+    btnB.classList.toggle('primary', b === 1);
+    btnB.classList.toggle('secondary', b === 0);
+
+    btnCin.innerText = `Toggle Switch C_in (${bin})`;
+    btnCin.classList.toggle('primary', bin === 1);
+    btnCin.classList.toggle('secondary', bin === 0);
+
+    if (view === 'ha') {
+      const difference = a ^ b;
+      const borrow = a & b;
+
+      // Switch knob displacements relative to center (0,0) inside translated group
+      switchHaA.setAttribute('cy', a ? 5 : -5);
+      switchHaB.setAttribute('cy', b ? 5 : -5);
+
+      // Highlight active logic wires
+      document.getElementById('bb-hs-wire-a1').classList.toggle('active', a === 1);
+      document.getElementById('bb-hs-wire-a2').classList.toggle('active', a === 1);
+      document.getElementById('bb-hs-wire-b1').classList.toggle('active', b === 1);
+      document.getElementById('bb-hs-wire-b2').classList.toggle('active', b === 1);
+      document.getElementById('bb-hs-wire-difference').classList.toggle('active', difference === 1);
+      document.getElementById('bb-hs-wire-borrow').classList.toggle('active', borrow === 1);
+
+      // LEDs
+      document.getElementById('bb-hs-led-difference').classList.toggle('active', difference === 1);
+      document.getElementById('bb-hs-led-borrow').classList.toggle('active', borrow === 1);
+
+      // Chip glowing outlines
+      document.getElementById('ic-bb-hs-74ls86').classList.toggle('active', difference === 1);
+      document.getElementById('ic-bb-hs-74ls08').classList.toggle('active', borrow === 1);
+
+      // HA completion condition: both switches on
+      if (a === 1 && b === 1) {
+        completeModule('module-breadboard');
+      }
+    } else {
+      const xor1 = a ^ b;
+      const difference = xor1 ^ bin;
+      const and1 = a & b;
+      const and2 = xor1 & bin;
+      const borrow = and1 | and2;
+
+      // Switch knob displacements relative to center (0,0) inside translated group
+      switchFaA.setAttribute('cy', a ? 5 : -5);
+      switchFaB.setAttribute('cy', b ? 5 : -5);
+      switchFaCin.setAttribute('cy', bin ? 5 : -5);
+
+      // Highlight active logic wires
+      document.getElementById('bb-fs-wire-a1').classList.toggle('active', a === 1);
+      document.getElementById('bb-fs-wire-a2').classList.toggle('active', a === 1);
+      document.getElementById('bb-fs-wire-b1').classList.toggle('active', b === 1);
+      document.getElementById('bb-fs-wire-b2').classList.toggle('active', b === 1);
+      document.getElementById('bb-fs-wire-xor1-xor4').classList.toggle('active', xor1 === 1);
+      document.getElementById('bb-fs-wire-xor1-and4').classList.toggle('active', xor1 === 1);
+      document.getElementById('bb-fs-wire-cin1').classList.toggle('active', bin === 1);
+      document.getElementById('bb-fs-wire-cin2').classList.toggle('active', bin === 1);
+      document.getElementById('bb-fs-wire-difference').classList.toggle('active', difference === 1);
+      document.getElementById('bb-fs-wire-and1').classList.toggle('active', and1 === 1);
+      document.getElementById('bb-fs-wire-and2').classList.toggle('active', and2 === 1);
+      document.getElementById('bb-fs-wire-borrow').classList.toggle('active', borrow === 1);
+
+      // LEDs
+      document.getElementById('bb-fs-led-difference').classList.toggle('active', difference === 1);
+      document.getElementById('bb-fs-led-borrow').classList.toggle('active', borrow === 1);
+
+      // Chip glowing outlines
+      document.getElementById('ic-bb-fs-74ls86').classList.toggle('active', xor1 === 1 || difference === 1);
+      document.getElementById('ic-bb-fs-74ls08').classList.toggle('active', and1 === 1 || and2 === 1);
+      document.getElementById('ic-bb-fs-74ls32').classList.toggle('active', borrow === 1);
+
+      // FA completion condition: inputs a, b, bin = 1, 1, 1
+      if (a === 1 && b === 1 && bin === 1) {
+        completeModule('module-breadboard');
+      }
+    }
+  }
+
+  const triggerToggleA = () => {
+    logClick();
+    state.breadboard.a = state.breadboard.a ? 0 : 1;
+    playSound('click');
+    updateBreadboard();
+  };
+
+  const triggerToggleB = () => {
+    logClick();
+    state.breadboard.b = state.breadboard.b ? 0 : 1;
+    playSound('click');
+    updateBreadboard();
+  };
+
+  const triggerToggleCin = () => {
+    logClick();
+    state.breadboard.bin = state.breadboard.bin ? 0 : 1;
+    playSound('click');
+    updateBreadboard();
+  };
+
+  btnA.addEventListener('click', triggerToggleA);
+  btnB.addEventListener('click', triggerToggleB);
+  btnCin.addEventListener('click', triggerToggleCin);
+
+  switchHaA.parentElement.addEventListener('click', triggerToggleA);
+  switchHaB.parentElement.addEventListener('click', triggerToggleB);
+  switchFaA.parentElement.addEventListener('click', triggerToggleA);
+  switchFaB.parentElement.addEventListener('click', triggerToggleB);
+  switchFaCin.parentElement.addEventListener('click', triggerToggleCin);
+
+  updateBreadboard();
+}
+
+// MODULE 4: KARNAUGH MAP (K-MAP) LAB LOGIC
+function initKMapModule() {
+  const btnViewHa = document.getElementById('btn-kmap-view-ha');
+  const btnViewFa = document.getElementById('btn-kmap-view-fa');
+  const targetsHa = document.getElementById('kmap-targets-ha');
+  const targetsFa = document.getElementById('kmap-targets-fa');
+
+  const btnTargetHaSum = document.getElementById('btn-kmap-target-hs-difference');
+  const btnTargetHaCarry = document.getElementById('btn-kmap-target-hs-borrow');
+  const btnTargetFaSum = document.getElementById('btn-kmap-target-fs-difference');
+  const btnTargetFaCarry = document.getElementById('btn-kmap-target-fs-borrow');
+
+  const btnModeGuided = document.getElementById('btn-kmap-mode-guided');
+  const btnModePractice = document.getElementById('btn-kmap-mode-practice');
+
+  const btnGroup = document.getElementById('btn-kmap-group');
+  const btnClear = document.getElementById('btn-kmap-clear');
+  const btnReset = document.getElementById('btn-kmap-reset');
+
+  const svgHa = document.getElementById('kmap-hs-svg');
+  const svgFa = document.getElementById('kmap-fs-svg');
+  const overlayToggle = document.getElementById('kmap-circuit-overlay-toggle');
+
+  // VIEW toggles
+  btnViewHa.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    state.kmap.view = 'ha';
+    btnViewHa.classList.add('active');
+    btnViewFa.classList.remove('active');
+    targetsHa.classList.remove('hidden');
+    targetsFa.classList.add('hidden');
+    svgHa.classList.remove('hidden');
+    svgFa.classList.add('hidden');
+    selectTarget('difference');
+  });
+
+  btnViewFa.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    state.kmap.view = 'fa';
+    btnViewHa.classList.remove('active');
+    btnViewFa.classList.add('active');
+    targetsHa.classList.add('hidden');
+    targetsFa.classList.remove('hidden');
+    svgHa.classList.add('hidden');
+    svgFa.classList.remove('hidden');
+    selectTarget('borrow');
+  });
+
+  // TARGET toggles
+  btnTargetHaSum.addEventListener('click', () => { selectTarget('difference'); });
+  btnTargetHaCarry.addEventListener('click', () => { selectTarget('borrow'); });
+  btnTargetFaSum.addEventListener('click', () => { selectTarget('difference'); });
+  btnTargetFaCarry.addEventListener('click', () => { selectTarget('borrow'); });
+
+  function selectTarget(target) {
+    logClick();
+    playSound('click');
+    state.kmap.target = target;
+    
+    // Toggle active state
+    btnTargetHaSum.classList.toggle('active', target === 'difference');
+    btnTargetHaCarry.classList.toggle('active', target === 'borrow');
+    btnTargetFaSum.classList.toggle('active', target === 'difference');
+    btnTargetFaCarry.classList.toggle('active', target === 'borrow');
+
+    // Update FA title text dynamically
+    if (state.kmap.view === 'fa') {
+      const titleEl = document.getElementById('kmap-fs-title');
+      if (titleEl) {
+        titleEl.textContent = target === 'difference' ? "DIFFERENCE (S) K-Map" : "BORROW (Bout) K-Map";
+        titleEl.setAttribute('fill', target === 'difference' ? 'var(--accent-cyan)' : 'var(--accent-amber)');
+      }
+    }
+
+    if (state.kmap.mode === 'practice') {
+      setupKMapPractice();
+    } else {
+      resetKMapLoops();
+    }
+  }
+
+  // MODE toggles
+  btnModeGuided.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    state.kmap.mode = 'guided';
+    btnModeGuided.classList.add('active');
+    btnModePractice.classList.remove('active');
+    document.getElementById('kmap-practice-mcq-container').classList.add('hidden');
+    resetKMapLoops();
+  });
+
+  btnModePractice.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    state.kmap.mode = 'practice';
+    btnModeGuided.classList.remove('active');
+    btnModePractice.classList.add('active');
+    setupKMapPractice();
+  });
+
+  // Action buttons
+  btnGroup.addEventListener('click', () => {
+    logClick();
+    validateKMapSelection();
+  });
+
+  btnClear.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    state.kmap.selection = [];
+    document.querySelectorAll('.kmap-cell-g').forEach(c => c.classList.remove('selected'));
+    showKMapAlert("Selection cleared.");
+  });
+
+  btnReset.addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    resetKMapLoops();
+    showKMapAlert("Loops reset.");
+  });
+
+  // MCQ Practice submit
+  document.getElementById('btn-kmap-submit-practice').addEventListener('click', () => {
+    logClick();
+    submitKMapPractice();
+  });
+
+  // Circuit diagram overlay toggle
+  overlayToggle.addEventListener('change', (e) => {
+    logClick();
+    playSound('click');
+    document.body.classList.toggle('kmap-overlay-active', e.target.checked);
+  });
+
+  // Bind cell click events
+  bindKMapCellClicks();
+
+  // Initial update
+  updateKMapEquation();
+  updateGuidedInstructions();
+}
+
+function getCellValue(r, c) {
+  const view = state.kmap.view;
+  const target = state.kmap.target;
+  if (view === 'ha') {
+    if (target === 'difference') {
+      return (r === 0 && c === 1) || (r === 1 && c === 0) ? 1 : 0;
+    } else {
+      return (r === 0 && c === 1) ? 1 : 0;
+    }
+  } else {
+    // Horizontal FA (Rows A: 0, 1; Columns BCin: 00=0, 01=1, 11=2, 10=3)
+    if (target === 'difference') {
+      return (r === 0 && (c === 1 || c === 3)) || (r === 1 && (c === 0 || c === 2)) ? 1 : 0;
+    } else {
+      return (r === 0 && (c === 1 || c === 2 || c === 3)) || (r === 1 && c === 2) ? 1 : 0;
+    }
+  }
+}
+
+function validateKMapSelection() {
+  const selection = state.kmap.selection;
+  if (selection.length === 0) {
+    showKMapAlert("Select cells first!", false);
+    triggerKMapFlash('flash-incorrect');
+    return;
+  }
+
+  // Check if all selected cells contain 1
+  for (let cell of selection) {
+    if (getCellValue(cell.r, cell.c) !== 1) {
+      showKMapAlert("Group must only contain cells with value 1!", false);
+      triggerKMapFlash('flash-incorrect');
+      if (state.soundEnabled) playSound('incorrect');
+      recordStudentMistake('K-Map: Selecting Cells containing 0');
+      return;
+    }
+  }
+
+  const size = selection.length;
+  if (size !== 1 && size !== 2 && size !== 4 && size !== 8) {
+    showKMapAlert("Group size must be 1, 2, or 4 cells!", false);
+    triggerKMapFlash('flash-incorrect');
+    if (state.soundEnabled) playSound('incorrect');
+    recordStudentMistake('K-Map: Invalid Grouping Size');
+    return;
+  }
+
+  // Single cell is always valid
+  if (size === 1) {
+    createGroup(selection);
+    return;
+  }
+
+  if (size === 2) {
+    const c1 = selection[0];
+    const c2 = selection[1];
+    
+    let isRowAdjacent = false;
+    let isColAdjacent = false;
+    
+    if (state.kmap.view === 'ha') {
+      isRowAdjacent = (c1.r === c2.r && Math.abs(c1.c - c2.c) === 1);
+      isColAdjacent = (c1.c === c2.c && Math.abs(c1.r - c2.r) === 1);
+    } else {
+      // Horizontal FA: Rows A (2), Cols BCin (4)
+      if (c1.r === c2.r) {
+        const diff = Math.abs(c1.c - c2.c);
+        isRowAdjacent = (diff === 1 || diff === 3); // column wrapping
+      }
+      if (c1.c === c2.c) {
+        isColAdjacent = (Math.abs(c1.r - c2.r) === 1);
+      }
+    }
+
+    if (isRowAdjacent || isColAdjacent) {
+      createGroup(selection);
+    } else {
+      showKMapAlert("Selected cells are not adjacent!", false);
+      triggerKMapFlash('flash-incorrect');
+      if (state.soundEnabled) playSound('incorrect');
+      recordStudentMistake('K-Map: Cells Not Adjacent');
+    }
+    return;
+  }
+
+  if (size === 4) {
+    if (state.kmap.view === 'fa') {
+      // Check horizontal full row block (4 cells in a row)
+      const allSameRow = selection.every(c => c.r === selection[0].r);
+      if (allSameRow) {
+        createGroup(selection);
+        return;
+      }
+    }
+
+    // Check 2x2 contiguous block
+    const rowsSet = new Set(selection.map(c => c.r));
+    const colsSet = new Set(selection.map(c => c.c));
+    if (rowsSet.size === 2 && colsSet.size === 2) {
+      const rows = Array.from(rowsSet).sort((a,b)=>a-b);
+      const cols = Array.from(colsSet).sort((a,b)=>a-b);
+      
+      if (state.kmap.view === 'ha') {
+        const isColsAdjacent = Math.abs(cols[0] - cols[1]) === 1;
+        const isRowsAdjacent = Math.abs(rows[0] - rows[1]) === 1;
+        if (isColsAdjacent && isRowsAdjacent) {
+          createGroup(selection);
+          return;
+        }
+      } else {
+        const isRowsAdjacent = Math.abs(rows[0] - rows[1]) === 1;
+        const isColsAdjacent = Math.abs(cols[0] - cols[1]) === 1 || (cols[0] === 0 && cols[1] === 3); // col wrap
+        if (isColsAdjacent && isRowsAdjacent) {
+          createGroup(selection);
+          return;
+        }
+      }
+    }
+
+    showKMapAlert("Selected cells must form a contiguous 2x2 or row block!", false);
+    triggerKMapFlash('flash-incorrect');
+    if (state.soundEnabled) playSound('incorrect');
+    recordStudentMistake('K-Map: Size 4 Group Not Contiguous');
+    return;
+  }
+}
+
+function getTermForGroup(cells) {
+  const view = state.kmap.view;
+
+  if (view === 'ha') {
+    if (cells.length === 1) {
+      const r = cells[0].r;
+      const c = cells[0].c;
+      const termA = c === 1 ? "A" : "A'";
+      const termB = r === 1 ? "B" : "B'";
+      if (view === 'ha' && target === 'borrow') {
+        // Half Subtractor Borrow is A'B (r=0, c=1)
+        return "A'·B";
+      }
+      return `${termA}·${termB}`;
+    }
+  } else {
+    // Horizontal Full Subtractor (Rows A: 0, 1; Columns BCin: 00=0, 01=1, 11=2, 10=3)
+    const colBCin = [
+      {b: 0, bin: 0},
+      {b: 0, bin: 1},
+      {b: 1, bin: 1},
+      {b: 1, bin: 0}
+    ];
+
+    if (cells.length === 1) {
+      const r = cells[0].r;
+      const c = cells[0].c;
+      const termA = r === 1 ? "A" : "A'";
+      const bc = colBCin[c];
+      const termB = bc.b === 1 ? "B" : "B'";
+      const termCin = bc.bin === 1 ? "Bin" : "Bin'";
+      return `${termA}·${termB}·${termCin}`;
+    }
+
+    if (cells.length === 2) {
+      const r1 = cells[0].r, c1 = cells[0].c;
+      const r2 = cells[1].r, c2 = cells[1].c;
+
+      if (c1 === c2) {
+        // Vertical: same column -> A is eliminated, B and Bin remain
+        const bc = colBCin[c1];
+        const termB = bc.b === 1 ? "B" : "B'";
+        const termCin = bc.bin === 1 ? "Bin" : "Bin'";
+        return `${termB}·${termCin}`;
+      } else {
+        // Horizontal: same row -> A remains, one of B or Bin is eliminated
+        const termA = r1 === 1 ? "A" : "A'";
+        const bc1 = colBCin[c1];
+        const bc2 = colBCin[c2];
+        if (bc1.b === bc2.b) {
+          const termB = bc1.b === 1 ? "B" : "B'";
+          return `${termA}·${termB}`;
+        } else {
+          const termCin = bc1.bin === 1 ? "Bin" : "Bin'";
+          return `${termA}·${termCin}`;
+        }
+      }
+    }
+
+    if (cells.length === 4) {
+      const cols = Array.from(new Set(cells.map(c=>c.c)));
+      const rows = Array.from(new Set(cells.map(c=>c.r)));
+
+      if (cols.length === 4) {
+        // Full row: B and Bin are eliminated, A remains
+        return rows[0] === 1 ? "A" : "A'";
+      }
+
+      if (rows.length === 2 && cols.length === 2) {
+        // 2x2 block: A is eliminated, one of B or Bin is constant
+        const bc1 = colBCin[cols[0]];
+        const bc2 = colBCin[cols[1]];
+        if (bc1.b === bc2.b) {
+          return bc1.b === 1 ? "B" : "B'";
+        } else {
+          return bc1.bin === 1 ? "Bin" : "Bin'";
+        }
+      }
+    }
+  }
+  return "";
+}
+
+function drawGroupLoop(cells, colorIndex) {
+  const colors = ["#00f5d4", "#ff9f1c", "#ff007f", "#ff0055"]; // teal, orange, hotpink, neon red
+  const color = colors[colorIndex % colors.length];
+
+  const view = state.kmap.view;
+  const target = state.kmap.target;
+  const targetLoopsContainerId = view === 'ha' 
+    ? (target === 'difference' ? 'kmap-hs-difference-loops' : 'kmap-hs-borrow-loops')
+    : 'kmap-fs-loops';
+  
+  const container = document.getElementById(targetLoopsContainerId);
+  if (!container) return;
+
+  let pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  pathElement.setAttribute("class", "kmap-loop-path");
+  pathElement.style.setProperty("--loop-color", color);
+
+  // Set grid dimensions based on view
+  const cellW = 60;
+  const cellH = 60;
+  const startX = view === 'ha' ? 40 : 120;
+  const startY = 70; // Both HA and FA start at Y=70 in the SVG now!
+
+  // Find cell boundaries in terms of rows and cols
+  const rows = cells.map(c => c.r);
+  const cols = cells.map(c => c.c);
+  const rMin = Math.min(...rows);
+  const rMax = Math.max(...rows);
+  const cMin = Math.min(...cols);
+  const cMax = Math.max(...cols);
+
+  const R = 24; // capsule corner radius
+  const pad = 6;
+
+  if (view === 'fa' && cells.length === 2 && rMin === rMax && Math.abs(cols[0] - cols[1]) === 3) {
+    // Horizontal wrap-around pair (col 0 and col 3)
+    const y = startY + rMin * cellH;
+    const top = y + pad;
+    const bottom = y + cellH - pad;
+    
+    // Left half (col 0)
+    const left1 = startX + pad;
+    const right1 = startX + cellW - 20; // open edge
+    const p1 = `M ${right1} ${top} H ${left1 + R} A ${R} ${R} 0 0 0 ${left1} ${top + R} V ${bottom - R} A ${R} ${R} 0 0 0 ${left1 + R} ${bottom} H ${right1}`;
+    
+    // Right half (col 3)
+    const left2 = startX + 3 * cellW + 20; // open edge
+    const right2 = startX + 4 * cellW - pad;
+    const p2 = `M ${left2} ${top} H ${right2 - R} A ${R} ${R} 0 0 1 ${right2} ${top + R} V ${bottom - R} A ${R} ${R} 0 0 1 ${right2 - R} ${bottom} H ${left2}`;
+    
+    pathElement.setAttribute("d", `${p1} ${p2}`);
+  }
+  else if (view === 'fa' && cells.length === 4 && rMin !== rMax && cols.includes(0) && cols.includes(3)) {
+    // 2x2 wrap-around quad (cols 0 and 3, rows 0 and 1)
+    const top = startY + pad;
+    const bottom = startY + 2 * cellH - pad;
+    
+    // Left half (col 0)
+    const left1 = startX + pad;
+    const right1 = startX + cellW - 20; // open edge
+    const p1 = `M ${right1} ${top} H ${left1 + R} A ${R} ${R} 0 0 0 ${left1} ${top + R} V ${bottom - R} A ${R} ${R} 0 0 0 ${left1 + R} ${bottom} H ${right1}`;
+    
+    // Right half (col 3)
+    const left2 = startX + 3 * cellW + 20; // open edge
+    const right2 = startX + 4 * cellW - pad;
+    const p2 = `M ${left2} ${top} H ${right2 - R} A ${R} ${R} 0 0 1 ${right2} ${top + R} V ${bottom - R} A ${R} ${R} 0 0 1 ${right2 - R} ${bottom} H ${left2}`;
+    
+    pathElement.setAttribute("d", `${p1} ${p2}`);
+  }
+  else {
+    // Normal contiguous loops (size 1, 2, or 4)
+    const left = startX + cMin * cellW + pad;
+    const right = startX + (cMax + 1) * cellW - pad;
+    const top = startY + rMin * cellH + pad;
+    const bottom = startY + (rMax + 1) * cellH - pad;
+
+    const W = right - left;
+    const H = bottom - top;
+
+    // Draw a perfectly sized rounded rect/capsule
+    const d = `M ${left + R} ${top} ` +
+              `H ${right - R} ` +
+              `A ${R} ${R} 0 0 1 ${right} ${top + R} ` +
+              `V ${bottom - R} ` +
+              `A ${R} ${R} 0 0 1 ${right - R} ${bottom} ` +
+              `H ${left + R} ` +
+              `A ${R} ${R} 0 0 1 ${left} ${bottom - R} ` +
+              `V ${top + R} ` +
+              `A ${R} ${R} 0 0 1 ${left + R} ${top} Z`;
+              
+    pathElement.setAttribute("d", d);
+  }
+
+  container.appendChild(pathElement);
+}
+
+function checkGuidedStep(selection, term) {
+  const target = state.kmap.target;
+  const view = state.kmap.view;
+  const step = state.kmap.guidedStep;
+
+  if (view === 'ha') {
+    if (target === 'borrow') {
+      if (selection.length === 1 && selection[0].r === 1 && selection[0].c === 1) {
+        showKMapAlert("Correct! You grouped the cell (A=1, B=1).", true);
+        triggerKMapFlash('flash-correct');
+        return true;
+      } else {
+        showKMapAlert("Select the single cell where A=1 and B=1 (bottom-right cell).", false);
+        return false;
+      }
+    } else {
+      if (selection.length === 2) {
+        showKMapAlert("Diagonal grouping is not allowed! Select and group each cell individually.", false);
+        return false;
+      }
+      if (selection.length === 1) {
+        const r = selection[0].r, c = selection[0].c;
+        if ((r === 0 && c === 1) || (r === 1 && c === 0)) {
+          const already = state.kmap.groups.some(g => g.cells[0].r === r && g.cells[0].c === c);
+          if (already) {
+            showKMapAlert("This cell is already grouped!", false);
+            return false;
+          }
+          showKMapAlert(`Correct! You grouped cell (${r === 0 ? "A=1, B=0" : "A=0, B=1"}) individually.`, true);
+          triggerKMapFlash('flash-correct');
+          return true;
+        }
+      }
+      showKMapAlert("Select one of the '1' cells to group it individually.", false);
+      return false;
+    }
+  } else {
+    // Full Subtractor
+    if (target === 'borrow') {
+      const isAB = selection.length === 2 && 
+                   selection.some(s => s.r === 0 && s.c === 2) && 
+                   selection.some(s => s.r === 0 && s.c === 3); // A'B
+                   
+      const isBCin = selection.length === 2 && 
+                     selection.some(s => s.r === 0 && s.c === 2) && 
+                     selection.some(s => s.r === 1 && s.c === 2); // B Bin
+                     
+      const isACin = selection.length === 2 && 
+                     selection.some(s => s.r === 0 && s.c === 1) && 
+                     selection.some(s => s.r === 0 && s.c === 2); // A'Bin
+
+      if (isAB) {
+        const already = state.kmap.groups.some(g => g.term === "A'·B");
+        if (already) {
+          showKMapAlert("You already grouped the A·B loop!", false);
+          return false;
+        }
+        showKMapAlert("Correct! You found the loop representing A·B.", true);
+        triggerKMapFlash('flash-correct');
+        return true;
+      } else if (isBCin) {
+        const already = state.kmap.groups.some(g => g.term === "B·Bin");
+        if (already) {
+          showKMapAlert("You already grouped the B·Bin loop!", false);
+          return false;
+        }
+        showKMapAlert("Correct! You found the loop representing B·Bin.", true);
+        triggerKMapFlash('flash-correct');
+        return true;
+      } else if (isACin) {
+        const already = state.kmap.groups.some(g => g.term === "A·Bin");
+        if (already) {
+          showKMapAlert("You already grouped the A·Bin loop!", false);
+          return false;
+        }
+        showKMapAlert("Correct! You found the loop representing A·Bin.", true);
+        triggerKMapFlash('flash-correct');
+        return true;
+      } else {
+        showKMapAlert("Invalid selection. Try to find one of the three 2-cell adjacent loops (representing A'B, B Bin, or A'Bin).", false);
+        return false;
+      }
+    } else {
+      // DIFFERENCE: 4 individual cells
+      if (selection.length > 1) {
+        showKMapAlert("No groupings are possible on this checkerboard map! Select and group each cell individually.", false);
+        return false;
+      }
+      if (selection.length === 1) {
+        const r = selection[0].r, c = selection[0].c;
+        const isValidSumCell = (r === 0 && (c === 1 || c === 3)) || (r === 1 && (c === 0 || c === 2));
+        if (isValidSumCell) {
+          const already = state.kmap.groups.some(g => g.cells[0].r === r && g.cells[0].c === c);
+          if (already) {
+            showKMapAlert("This cell is already grouped!", false);
+            return false;
+          }
+          showKMapAlert("Correct! Cell grouped individually.", true);
+          triggerKMapFlash('flash-correct');
+          return true;
+        }
+      }
+      showKMapAlert("Select one of the '1' cells to group it individually.", false);
+      return false;
+    }
+  }
+  return false;
+}
+
+function createGroup(selection) {
+  const term = getTermForGroup(selection);
+  
+  if (state.kmap.mode === 'guided') {
+    const isCorrect = checkGuidedStep(selection, term);
+    if (!isCorrect) {
+      if (state.soundEnabled) playSound('incorrect');
+      triggerKMapFlash('flash-incorrect');
+      return;
+    }
+  }
+
+  // Push valid group
+  state.kmap.groups.push({
+    cells: [...selection],
+    term: term
+  });
+
+  if (state.soundEnabled) playSound('correct');
+  
+  // Clean up selected styles
+  selection.forEach(cellCoords => {
+    const cellEl = findCellElement(cellCoords);
+    if (cellEl) {
+      cellEl.classList.remove('selected');
+      cellEl.classList.add('grouped');
+    }
+  });
+
+  // Render SVG loop path
+  const colorIndex = state.kmap.groups.length - 1;
+  drawGroupLoop(selection, colorIndex);
+
+  state.kmap.selection = [];
+  updateKMapEquation();
+  updateGuidedInstructions();
+  checkKMapCompletion();
+}
+
+function findCellElement(coords) {
+  const view = state.kmap.view;
+  const target = state.kmap.target;
+  if (view === 'ha') {
+    const mapName = target === 'difference' ? 'hs-difference' : 'hs-borrow';
+    return document.querySelector(`.kmap-cell-g[data-map="${mapName}"][data-row="${coords.r}"][data-col="${coords.c}"]`);
+  } else {
+    return document.querySelector(`.kmap-cell-g[data-map="fa"][data-row="${coords.r}"][data-col="${coords.c}"]`);
+  }
+}
+
+function updateKMapEquation() {
+  const view = state.kmap.view;
+  const target = state.kmap.target;
+  const groups = state.kmap.groups;
+
+  let lhs = "";
+  if (view === 'ha') {
+    lhs = target === 'difference' ? "DIFFERENCE (S) = " : "BORROW (C) = ";
+  } else {
+    lhs = target === 'difference' ? "DIFFERENCE (S) = " : "B<sub>out</sub> = ";
+  }
+  document.getElementById('kmap-eq-lhs').innerHTML = lhs;
+
+  if (groups.length === 0) {
+    document.getElementById('kmap-eq-rhs').innerText = "...";
+    return;
+  }
+
+  let termsHtml = groups.map(g => `<span class="formula-term">${g.term}</span>`).join(" + ");
+  
+  if (view === 'ha' && target === 'difference' && groups.length === 2) {
+    termsHtml += ` <span class="formula-term" style="color: var(--accent-amber);">→ A ⊕ B</span>`;
+  }
+  if (view === 'fa' && target === 'difference' && groups.length === 4) {
+    termsHtml += ` <span class="formula-term" style="color: var(--accent-amber);">→ A ⊕ B ⊕ Bin</span>`;
+  }
+
+  document.getElementById('kmap-eq-rhs').innerHTML = termsHtml;
+}
+
+function updateGuidedInstructions() {
+  const view = state.kmap.view;
+  const target = state.kmap.target;
+  const step = state.kmap.guidedStep;
+  const numGroups = state.kmap.groups.length;
+
+  let title = "Guided Task";
+  let instructions = "";
+
+  if (state.kmap.mode === 'practice') {
+    title = "Practice Mode";
+    instructions = "Define your loops by selecting adjacent 1-cells, click 'Group Selection', then pick the correct simplified Boolean expression below.";
+    document.getElementById('kmap-step-title').innerText = title;
+    document.getElementById('kmap-instructions').innerText = instructions;
+    return;
+  }
+
+  if (view === 'ha') {
+    if (target === 'borrow') {
+      if (numGroups === 0) {
+        instructions = "Select the single cell where A=1 and B=1 (bottom-right cell) and click 'Group Selection'.";
+      } else {
+        instructions = "Great! You derived C = A·B. Borrow K-map is complete!";
+      }
+    } else {
+      if (numGroups === 0) {
+        instructions = "Group the cell at row B=0, col A=1 (representing A·B') individually.";
+      } else if (numGroups === 1) {
+        instructions = "Now group the other '1' cell at row B=1, col A=0 (representing A'·B) individually.";
+      } else {
+        instructions = "Excellent! You derived DIFFERENCE = A·B' + A'·B. Since they are diagonal, no simplification is possible, so DIFFERENCE remains as A ⊕ B.";
+      }
+    }
+  } else {
+    if (target === 'borrow') {
+      const hasAB = state.kmap.groups.some(g => g.term === "A·B");
+      const hasBCin = state.kmap.groups.some(g => g.term === "B·Bin");
+      const hasACin = state.kmap.groups.some(g => g.term === "A·Bin");
+      
+      const missing = [];
+      if (!hasAB) missing.push("A'B (row A=0, cols BBin=11 & 10)");
+      if (!hasBCin) missing.push("BBin (col BBin=11, rows A=0 & 1)");
+      if (!hasACin) missing.push("A'Bin (row A=0, cols BBin=01 & 11)");
+      
+      if (missing.length > 0) {
+        instructions = `Find and group the loops representing: ${missing.join(", ")}. Select 2 adjacent 1s and click 'Group Selection'.`;
+      } else {
+        instructions = "Success! You found all 3 loops. These represent the terms AB, BCin, and ACin. Thus Bout = AB + BCin + ACin. They overlap beautifully!";
+      }
+    } else {
+      if (numGroups < 4) {
+        instructions = `Group each of the four '1' cells individually. (${numGroups}/4 grouped). Click a cell and click 'Group Selection'.`;
+      } else {
+        instructions = "Success! You grouped all 4 cells. In this checkerboard pattern, no adjacency simplification is possible. Thus DIFFERENCE stays as A ⊕ B ⊕ Bin.";
+      }
+    }
+  }
+
+  document.getElementById('kmap-step-title').innerText = title;
+  document.getElementById('kmap-instructions').innerText = instructions;
+}
+
+function checkKMapCompletion() {
+  const view = state.kmap.view;
+  const target = state.kmap.target;
+  const numGroups = state.kmap.groups.length;
+
+  if (state.kmap.mode === 'guided') {
+    let done = false;
+    if (view === 'ha') {
+      if (target === 'borrow' && numGroups === 1) done = true;
+      if (target === 'difference' && numGroups === 2) done = true;
+    } else {
+      if (target === 'borrow' && numGroups === 3) done = true;
+      if (target === 'difference' && numGroups === 4) done = true;
+    }
+
+    if (done) {
+      completeModule('module-kmap');
+    }
+  }
+}
+
+function setupKMapPractice() {
+  resetKMapLoops();
+  state.kmap.selectedChoiceIdx = -1;
+
+  const view = state.kmap.view;
+  const target = state.kmap.target;
+  
+  document.getElementById('kmap-practice-mcq-container').classList.remove('hidden');
+  document.getElementById('btn-kmap-submit-practice').disabled = true;
+
+  let choices = [];
+  let correctIdx = 0;
+
+  if (view === 'ha') {
+    if (target === 'borrow') {
+      choices = [
+        "C = A·B",
+        "C = A + B",
+        "C = A'·B",
+        "C = A ⊕ B"
+      ];
+    } else {
+      choices = [
+        "D = A ⊕ B",
+        "S = A·B",
+        "S = A + B",
+        "S = A'·B'"
+      ];
+    }
+  } else {
+    if (target === 'borrow') {
+      choices = [
+        "Bout = A·B + B·Bin + A·Bin",
+        "Bout = A·B·Bin",
+        "Bout = A·B + Bin",
+        "Bout = A + B + Bin"
+      ];
+    } else {
+      choices = [
+        "DIFFERENCE = A ⊕ B ⊕ Bin",
+        "DIFFERENCE = A·B + B·Bin + A·Bin",
+        "DIFFERENCE = A·B·Bin",
+        "DIFFERENCE = A'·B'·Bin + A·B"
+      ];
+    }
+  }
+
+  const correctText = choices[0];
+  state.kmap.practiceChoices = shuffleArray([...choices]);
+  state.kmap.correctChoiceIdx = state.kmap.practiceChoices.indexOf(correctText);
+
+  const container = document.getElementById('kmap-mcq-options');
+  container.innerHTML = "";
+  state.kmap.practiceChoices.forEach((choice, idx) => {
+    const btn = document.createElement('button');
+    btn.className = "mcq-btn";
+    btn.innerHTML = choice.replace(/Bin/g, "B<sub>in</sub>");
+    btn.addEventListener('click', () => {
+      logClick();
+      playSound('click');
+      selectMCQOption(idx);
+    });
+    container.appendChild(btn);
+  });
+
+  updateGuidedInstructions();
+}
+
+function selectMCQOption(idx) {
+  state.kmap.selectedChoiceIdx = idx;
+  const buttons = document.querySelectorAll('#kmap-mcq-options .mcq-btn');
+  buttons.forEach((btn, i) => {
+    btn.classList.toggle('selected', i === idx);
+  });
+  document.getElementById('btn-kmap-submit-practice').disabled = false;
+}
+
+function submitKMapPractice() {
+  const selected = state.kmap.selectedChoiceIdx;
+  const correct = state.kmap.correctChoiceIdx;
+
+  if (selected === correct) {
+    const view = state.kmap.view;
+    const target = state.kmap.target;
+    const numGroups = state.kmap.groups.length;
+    let expectedGroups = 1;
+    if (view === 'ha' && target === 'difference') expectedGroups = 2;
+    if (view === 'fa' && target === 'borrow') expectedGroups = 3;
+    if (view === 'fa' && target === 'difference') expectedGroups = 4;
+
+    if (numGroups < expectedGroups) {
+      showKMapAlert(`Equation is correct, but you have only grouped ${numGroups}/${expectedGroups} loops! Find all groups on the map first for full credit.`, false);
+      triggerKMapFlash('flash-incorrect');
+      if (state.soundEnabled) playSound('incorrect');
+      recordStudentMistake('K-Map: Incomplete Grouping Loops');
+      return;
+    }
+
+    showKMapAlert("Correct! You solved the K-map and selected the minimal Boolean equation.", true);
+    triggerKMapFlash('flash-correct');
+    if (state.soundEnabled) playSound('correct');
+    completeModule('module-kmap');
+  } else {
+    showKMapAlert("Incorrect equation selection. Review your groupings and try again!", false);
+    triggerKMapFlash('flash-incorrect');
+    if (state.soundEnabled) playSound('incorrect');
+    recordStudentMistake('K-Map: Incorrect Equation Option');
+  }
+}
+
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+function resetKMapLoops() {
+  state.kmap.groups = [];
+  state.kmap.selection = [];
+  state.kmap.guidedStep = 0;
+
+  const containers = ['kmap-hs-difference-loops', 'kmap-hs-borrow-loops', 'kmap-fs-loops'];
+  containers.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = "";
+  });
+
+  const cells = document.querySelectorAll('.kmap-cell-g');
+  cells.forEach(cell => {
+    cell.classList.remove('selected', 'grouped');
+    
+    // Dynamically update the cell text values to match the target (DIFFERENCE or BORROW)
+    const mapType = cell.getAttribute('data-map');
+    const r = parseInt(cell.getAttribute('data-row'), 10);
+    const c = parseInt(cell.getAttribute('data-col'), 10);
+    
+    if (mapType === 'fa' && state.kmap.view === 'fa') {
+      const valText = cell.querySelector('.kmap-cell-val');
+      if (valText) {
+        valText.textContent = getCellValue(r, c);
+      }
+    } else if (mapType === 'hs-difference') {
+      const valText = cell.querySelector('.kmap-cell-val');
+      if (valText) {
+        valText.textContent = (r === 0 && c === 1) || (r === 1 && c === 0) ? 1 : 0;
+      }
+    } else if (mapType === 'hs-borrow') {
+      const valText = cell.querySelector('.kmap-cell-val');
+      if (valText) {
+        valText.textContent = (r === 1 && c === 1) ? 1 : 0;
+      }
+    }
+  });
+
+  updateKMapEquation();
+  updateGuidedInstructions();
+}
+
+function bindKMapCellClicks() {
+  const cells = document.querySelectorAll('.kmap-cell-g');
+  cells.forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      const mapName = cell.getAttribute('data-map');
+      const view = state.kmap.view;
+      const target = state.kmap.target;
+
+      if (view === 'ha') {
+        const expectedMap = target === 'difference' ? 'hs-difference' : 'hs-borrow';
+        if (mapName !== expectedMap) return;
+      } else {
+        if (mapName !== 'fa') return;
+      }
+
+      const r = parseInt(cell.getAttribute('data-row'));
+      const c = parseInt(cell.getAttribute('data-col'));
+
+      logClick();
+      playSound('click');
+
+      const index = state.kmap.selection.findIndex(s => s.r === r && s.c === c);
+      if (index !== -1) {
+        state.kmap.selection.splice(index, 1);
+        cell.classList.remove('selected');
+      } else {
+        state.kmap.selection.push({ r, c });
+        cell.classList.add('selected');
+      }
+    });
+  });
+}
+
+function showKMapAlert(msg, isSuccess = true) {
+  const box = document.getElementById('kmap-alert-box');
+  if (!box) return;
+  box.innerText = msg;
+  box.className = `feedback-text ${isSuccess ? 'success' : 'error'}`;
+}
+
+function triggerKMapFlash(className) {
+  const alertBox = document.getElementById('kmap-alert-box');
+  if (!alertBox) return;
+  alertBox.classList.add(className);
+  setTimeout(() => alertBox.classList.remove(className), 400);
+}
+
+// MODULE 8: LOGIC ARCADE (PRACTICE)
+function initArcadeModule() {
+  const predictBtn = document.getElementById('btn-mode-predict');
+  const tableBtn = document.getElementById('btn-mode-table');
+  const timeBtn = document.getElementById('btn-mode-time');
+
+  // Mode select events
+  predictBtn.addEventListener('click', () => { selectArcadeMode('predict'); });
+  tableBtn.addEventListener('click', () => { selectArcadeMode('table'); });
+  timeBtn.addEventListener('click', () => { selectArcadeMode('time'); });
+
+  // Quiz submission buttons
+  document.getElementById('btn-predict-s').addEventListener('click', () => togglePredictLed('s'));
+  document.getElementById('btn-predict-c').addEventListener('click', () => togglePredictLed('c'));
+  document.getElementById('btn-predict-submit').addEventListener('click', verifyPredictAnswer);
+  document.getElementById('btn-predict-next').addEventListener('click', setupPredictQuestion);
+
+  document.getElementById('btn-table-verify').addEventListener('click', verifyTableAnswer);
+  document.getElementById('btn-table-new').addEventListener('click', setupTableQuestion);
+
+  document.getElementById('btn-time-start').addEventListener('click', startTimedRun);
+
+  // Load highscore
+  const cachedHigh = localStorage.getItem('arcade_highscore') || 0;
+  state.arcade.highScore = parseInt(cachedHigh);
+  document.getElementById('arcade-highscore').innerText = state.arcade.highScore;
+
+  // Initialize view state (hidden initially)
+  const examInitPanel = document.getElementById('exam-initiation-panel');
+  const arcadeMainContainer = document.getElementById('arcade-main-container');
+  const examStatusBar = document.getElementById('exam-status-bar');
+  const examWarningModal = document.getElementById('exam-warning-modal');
+  const examResultOverlay = document.getElementById('exam-result-overlay');
+  const arcadeStepFooter = document.getElementById('arcade-step-footer');
+
+  if (examInitPanel) examInitPanel.classList.remove('hidden');
+  if (arcadeMainContainer) arcadeMainContainer.classList.add('hidden');
+  if (examStatusBar) examStatusBar.classList.add('hidden');
+  if (examResultOverlay) examResultOverlay.classList.add('hidden');
+
+  // ==================== EXAM MODE PROCTORING CONTROLLER ====================
+  const btnStartExam = document.getElementById('btn-start-exam');
+  const btnResumeExam = document.getElementById('btn-resume-exam');
+  const btnFinishReturn = document.getElementById('btn-finish-exam-return');
+
+  function enterFullscreen() {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+      elem.requestFullscreen().catch(err => console.log(err));
+    } else if (elem.webkitRequestFullscreen) {
+      elem.webkitRequestFullscreen();
+    } else if (elem.msRequestFullscreen) {
+      elem.msRequestFullscreen();
+    }
+  }
+
+  if (btnStartExam) {
+    btnStartExam.addEventListener('click', () => {
+      logClick();
+      playSound('click');
+      
+      state.exam.isActive = true;
+      state.exam.timeLeft = 600; // 10 minutes
+      state.exam.violations = 0;
+      state.arcade.score = 0;
+      state.arcade.streak = 0;
+      
+      document.getElementById('arcade-score').innerText = '0';
+      document.getElementById('arcade-streak').innerText = '0';
+      document.getElementById('exam-violations-val').innerText = '0 / 3';
+      document.getElementById('exam-current-score').innerText = '0';
+
+      enterFullscreen();
+
+      if (examInitPanel) examInitPanel.classList.add('hidden');
+      if (arcadeMainContainer) arcadeMainContainer.classList.remove('hidden');
+      if (examStatusBar) examStatusBar.classList.remove('hidden');
+      if (arcadeStepFooter) arcadeStepFooter.classList.add('hidden');
+      
+      const moduleArcade = document.getElementById('module-arcade');
+      if (moduleArcade) moduleArcade.classList.add('exam-active');
+
+      if (state.exam.timerId) clearInterval(state.exam.timerId);
+      state.exam.timerId = setInterval(updateExamTimer, 1000);
+      
+      selectArcadeMode('predict');
+    });
+  }
+
+  if (btnResumeExam) {
+    btnResumeExam.addEventListener('click', () => {
+      logClick();
+      playSound('click');
+      enterFullscreen();
+      if (examWarningModal) examWarningModal.classList.add('hidden');
+    });
+  }
+
+  if (btnFinishReturn) {
+    btnFinishReturn.addEventListener('click', () => {
+      logClick();
+      playSound('click');
+      if (examResultOverlay) examResultOverlay.classList.add('hidden');
+      if (examInitPanel) examInitPanel.classList.remove('hidden');
+      if (arcadeStepFooter) arcadeStepFooter.classList.remove('hidden');
+      state.completedModules.add('module-arcade');
+      updateProgressUI();
+    });
+  }
+
+  function updateExamTimer() {
+    if (!state.exam.isActive) return;
+
+    state.exam.timeLeft--;
+    
+    const minutes = Math.floor(state.exam.timeLeft / 60);
+    const seconds = state.exam.timeLeft % 60;
+    const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    const timerValEl = document.getElementById('exam-timer-val');
+    if (timerValEl) timerValEl.innerText = timeStr;
+
+    if (state.exam.timeLeft <= 0) {
+      endExam(false);
+    }
+  }
+
+  function triggerExamViolation(reason) {
+    if (!state.exam.isActive) return;
+
+    state.exam.violations++;
+    playSound('incorrect');
+
+    recordStudentMistake(`Exam Violation: ${reason}`);
+
+    const violationsValEl = document.getElementById('exam-violations-val');
+    const violationsCountEl = document.getElementById('exam-violations-count');
+    
+    if (violationsValEl) violationsValEl.innerText = `${state.exam.violations} / 3`;
+    if (violationsCountEl) violationsCountEl.innerText = `${state.exam.violations} / 3`;
+
+    if (state.exam.violations > 3) {
+      endExam(true);
+    } else {
+      const warningMsgEl = document.getElementById('exam-warning-msg');
+      if (warningMsgEl) warningMsgEl.innerText = `Proctoring Alert: ${reason}. Exit from fullscreen or tab switching is forbidden.`;
+      if (examWarningModal) examWarningModal.classList.remove('hidden');
+    }
+  }
+
+  function endExam(isViolated) {
+    state.exam.isActive = false;
+    if (state.exam.timerId) {
+      clearInterval(state.exam.timerId);
+      state.exam.timerId = null;
+    }
+
+    try {
+      if (document.exitFullscreen && document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+    } catch (e) {
+      console.log(e);
+    }
+
+    if (arcadeMainContainer) arcadeMainContainer.classList.add('hidden');
+    if (examStatusBar) examStatusBar.classList.add('hidden');
+    if (examWarningModal) examWarningModal.classList.add('hidden');
+
+    const moduleArcade = document.getElementById('module-arcade');
+    if (moduleArcade) moduleArcade.classList.remove('exam-active');
+
+    const finalScore = state.arcade.score;
+    const finalHigh = Math.max(state.arcade.highScore, finalScore);
+    state.arcade.highScore = finalHigh;
+    localStorage.setItem('arcade_highscore', finalHigh);
+    document.getElementById('arcade-highscore').innerText = finalHigh;
+
+    const totalAttempts = state.correctCount + state.exam.violations;
+    const accuracy = totalAttempts > 0 ? Math.round((state.correctCount / totalAttempts) * 100) : 100;
+
+    document.getElementById('exam-res-score').innerText = finalScore;
+    document.getElementById('exam-res-accuracy').innerText = `${accuracy}%`;
+    document.getElementById('exam-res-clicks').innerText = state.clicksCount;
+    document.getElementById('exam-res-faults').innerText = state.exam.violations;
+
+    const resTitle = document.getElementById('exam-result-title');
+    const resMsg = document.getElementById('exam-result-msg');
+    const resBadge = document.getElementById('exam-result-badge');
+
+    if (isViolated) {
+      resTitle.innerText = "Exam Terminated (Security Fault)";
+      resTitle.style.color = "#ff0055";
+      resMsg.innerText = "Proctoring checks logged more than 3 violations. Access terminated. Your last score has been recorded.";
+      resBadge.innerText = "❌";
+      recordStudentMistake("Exam: Terminated due to Security Violation limit");
+    } else {
+      resTitle.innerText = "Exam Completed Successfully";
+      resTitle.style.color = "var(--accent-cyan)";
+      resMsg.innerText = "Your assessment details have been written to the database roster.";
+      resBadge.innerText = "🏆";
+      completeModule('module-arcade');
+    }
+
+    if (state.currentUser && state.currentUser !== 'Guest') {
+      let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+      let idx = registry.findIndex(s => s.rollNo === state.currentRoll);
+      if (idx !== -1) {
+        registry[idx].clicksCount = state.clicksCount;
+        registry[idx].correctCount = state.correctCount;
+        registry[idx].accuracy = accuracy;
+        registry[idx].lastActive = getFormattedDate();
+        if (!isViolated) {
+          if (!registry[idx].completedModules.includes('module-arcade')) {
+            registry[idx].completedModules.push('module-arcade');
+          }
+          registry[idx].completionPct = Math.round((registry[idx].completedModules.length / 8) * 100);
+        }
+        localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+      }
+    }
+
+    if (examResultOverlay) examResultOverlay.classList.remove('hidden');
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    if (state.exam.isActive && !document.fullscreenElement) {
+      triggerExamViolation('Exited fullscreen mode');
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (state.exam.isActive && document.hidden) {
+      triggerExamViolation('Swapped browser tab/minimized');
+    }
+  });
+
+  window.addEventListener('blur', () => {
+    if (state.exam.isActive) {
+      triggerExamViolation('Window focus lost (possible Google Lens scan)');
+    }
+  });
+
+  document.addEventListener('copy', (e) => {
+    if (state.exam.isActive) {
+      e.preventDefault();
+      triggerExamViolation('Copy attempt detected');
+    }
+  });
+
+  document.addEventListener('contextmenu', (e) => {
+    if (state.exam.isActive) {
+      e.preventDefault();
+      triggerExamViolation('Right-click context menu (possible Google Lens scan)');
+    }
+  });
+
+  document.addEventListener('dragstart', (e) => {
+    if (state.exam.isActive) {
+      e.preventDefault();
+      triggerExamViolation('Element drag attempt');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!state.exam.isActive) return;
+
+    if (e.key === 'PrintScreen' || e.keyCode === 44) {
+      e.preventDefault();
+      triggerExamViolation('Screenshot key (PrintScreen) pressed');
+    }
+
+    if (e.metaKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
+      triggerExamViolation('Screenshot shortcut (Win+Shift+S) pressed');
+    }
+
+    if (e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault();
+      triggerExamViolation('Print/screenshot attempt');
+    }
+
+    if (e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X')) {
+      e.preventDefault();
+      triggerExamViolation('Keyboard copy/cut shortcut');
+    }
+
+    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i'))) {
+      e.preventDefault();
+      triggerExamViolation('Dev tools access blocked');
+    }
+  });
+}
+
+function selectArcadeMode(mode) {
+  logClick();
+  playSound('click');
+
+  // Stop running timers
+  if (state.arcade.timer.intervalId) {
+    clearInterval(state.arcade.timer.intervalId);
+    state.arcade.timer.active = false;
+  }
+
+  // UI button updates
+  document.getElementById('btn-mode-predict').classList.toggle('active', mode === 'predict');
+  document.getElementById('btn-mode-table').classList.toggle('active', mode === 'table');
+  document.getElementById('btn-mode-time').classList.toggle('active', mode === 'time');
+
+  // Panels visible updates
+  document.getElementById('game-panel-predict').classList.toggle('active', mode === 'predict');
+  document.getElementById('game-panel-table').classList.toggle('active', mode === 'table');
+  document.getElementById('game-panel-time').classList.toggle('active', mode === 'time');
+
+  state.arcade.mode = mode;
+
+  // Initialize specific game variables
+  if (mode === 'predict') setupPredictQuestion();
+  else if (mode === 'table') setupTableQuestion();
+  else if (mode === 'time') resetTimedGame();
+}
+
+function addScore(points) {
+  // Streak multiplier calculations
+  let mult = 1;
+  if (state.arcade.streak >= 8) mult = 4;
+  else if (state.arcade.streak >= 5) mult = 3;
+  else if (state.arcade.streak >= 3) mult = 2;
+
+  const scoreAdd = points * mult;
+  state.arcade.score += scoreAdd;
+  state.correctCount++;
+
+  if (state.arcade.score > state.arcade.highScore) {
+    state.arcade.highScore = state.arcade.score;
+    localStorage.setItem('arcade_highscore', state.arcade.highScore);
+  }
+
+  document.getElementById('arcade-score').innerText = state.arcade.score;
+  document.getElementById('arcade-highscore').innerText = state.arcade.highScore;
+  const curScoreEl = document.getElementById('exam-current-score');
+  if (curScoreEl) curScoreEl.innerText = state.arcade.score;
+  updateMasteryStats();
+}
+
+// GAME 1: PREDICT OUTPUT ACTIONS
+function setupPredictQuestion() {
+  const isFull = Math.random() > 0.5;
+  state.arcade.predict.isFull = isFull;
+  state.arcade.predict.a = Math.random() > 0.5 ? 1 : 0;
+  state.arcade.predict.b = Math.random() > 0.5 ? 1 : 0;
+  state.arcade.predict.bin = isFull ? (Math.random() > 0.5 ? 1 : 0) : 0;
+  state.arcade.predict.selectedS = 0;
+  state.arcade.predict.selectedC = 0;
+  state.arcade.predict.answered = false;
+
+  // Labels update
+  document.getElementById('predict-gate-type').innerText = isFull ? 'FULL SUBTRACTOR' : 'HALF SUBTRACTOR';
+  document.getElementById('predict-val-a').innerText = state.arcade.predict.a;
+  document.getElementById('predict-val-b').innerText = state.arcade.predict.b;
+  
+  const cinRow = document.getElementById('predict-bin-row');
+  if (isFull) {
+    cinRow.style.display = 'block';
+    document.getElementById('predict-val-bin').innerText = state.arcade.predict.bin;
+  } else {
+    cinRow.style.display = 'none';
+  }
+
+  // Reset LED values
+  document.getElementById('btn-predict-s').classList.remove('active');
+  document.getElementById('btn-predict-c').classList.remove('active');
+  document.getElementById('predict-val-s-lbl').innerText = '0';
+  document.getElementById('predict-val-c-lbl').innerText = '0';
+
+  // Feedback elements
+  document.getElementById('predict-feedback-msg').innerText = '';
+  document.getElementById('predict-feedback-msg').className = 'feedback-text';
+  document.getElementById('btn-predict-submit').classList.remove('hidden');
+  document.getElementById('btn-predict-next').classList.add('hidden');
+}
+
+function togglePredictLed(ledType) {
+  if (state.arcade.predict.answered) return;
+  playSound('click');
+  
+  if (ledType === 's') {
+    state.arcade.predict.selectedS = state.arcade.predict.selectedS ? 0 : 1;
+    document.getElementById('btn-predict-s').classList.toggle('active', state.arcade.predict.selectedS === 1);
+    document.getElementById('predict-val-s-lbl').innerText = state.arcade.predict.selectedS;
+  } else {
+    state.arcade.predict.selectedC = state.arcade.predict.selectedC ? 0 : 1;
+    document.getElementById('btn-predict-c').classList.toggle('active', state.arcade.predict.selectedC === 1);
+    document.getElementById('predict-val-c-lbl').innerText = state.arcade.predict.selectedC;
+  }
+}
+
+function verifyPredictAnswer() {
+  const p = state.arcade.predict;
+  const expectedDiff = p.a ^ p.b ^ p.bin;
+  const expectedBorrow = p.isFull ? (((!p.a && p.b) || (!(p.a ^ p.b) && p.bin)) ? 1 : 0) : ((!p.a && p.b) ? 1 : 0);
+
+  const correct = (p.selectedS === expectedDiff && p.selectedC === expectedBorrow);
+  p.answered = true;
+
+  const fMsg = document.getElementById('predict-feedback-msg');
+  const panel = document.getElementById('game-panel-predict');
+
+  if (correct) {
+    playSound('correct');
+    state.arcade.streak++;
+    fMsg.innerText = `CORRECT! +10 Points (Streak: ${state.arcade.streak})`;
+    fMsg.className = 'feedback-text correct';
+    addScore(10);
+    panel.classList.add('flash-correct');
+    setTimeout(() => panel.classList.remove('flash-correct'), 400);
+  } else {
+    playSound('incorrect');
+    state.arcade.streak = 0;
+    recordStudentMistake('Arcade: Incorrect Output Prediction');
+    
+    // Context feedback explanations
+    let hint = "";
+    if (p.isFull) {
+      hint = `Expected: DIFFERENCE=${expectedDiff}, BORROW=${expectedBorrow}. BORROW is 1 if A < B or if a borrow is forced.`;
+    } else {
+      hint = `Expected: DIFFERENCE=${expectedDiff}, BORROW=${expectedBorrow}. BORROW is 1 when minuend is smaller than subtrahend (A=0, B=1).`;
+    }
+    
+    fMsg.innerText = `WRONG. ${hint}`;
+    fMsg.className = 'feedback-text incorrect';
+    panel.classList.add('flash-incorrect');
+    setTimeout(() => panel.classList.remove('flash-incorrect'), 400);
+  }
+
+  document.getElementById('arcade-streak').innerText = state.arcade.streak;
+  document.getElementById('btn-predict-submit').classList.add('hidden');
+  document.getElementById('btn-predict-next').classList.remove('hidden');
+
+  // Completed Arcade benchmark check
+  if (state.arcade.score >= 100) {
+    completeModule('module-arcade');
+  }
+}
+
+// GAME 2: TRUTH TABLE COMPLETION
+function setupTableQuestion() {
+  const isFull = Math.random() > 0.5;
+  state.arcade.table.isFull = isFull;
+  state.arcade.table.userCells = {};
+  state.arcade.table.targetAnswers = {};
+
+  const tableEl = document.getElementById('arcade-fill-table');
+  tableEl.innerHTML = '';
+
+  const header = document.createElement('thead');
+  header.innerHTML = isFull 
+    ? '<tr><th>A</th><th>B</th><th>B<sub>in</sub></th><th>DIFFERENCE</th><th>B<sub>out</sub></th></tr>'
+    : '<tr><th>A</th><th>B</th><th>DIFFERENCE</th><th>BORROW</th></tr>';
+  tableEl.appendChild(header);
+
+  const tbody = document.createElement('tbody');
+  const rowsCount = isFull ? 8 : 4;
+
+  // We randomly choose 3 cells to blank out and ask the user to fill in
+  const blankCells = [];
+  while (blankCells.length < 3) {
+    const r = Math.floor(Math.random() * rowsCount);
+    const c = Math.floor(Math.random() * 2); // 0 = DIFFERENCE, 1 = BORROW/Bout
+    const key = `${r}-${c}`;
+    if (!blankCells.includes(key)) {
+      blankCells.push(key);
+    }
+  }
+
+  for (let r = 0; r < rowsCount; r++) {
+    const a = (r >> 1) & 1;
+    const b = r & 1;
+    const bin = isFull ? ((r >> 2) & 1) : 0;
+
+    const correctSum = a ^ b ^ bin;
+    const correctCarry = isFull ? (((!a && b) || (!(a ^ b) && bin)) ? 1 : 0) : ((!a && b) ? 1 : 0);
+
+    const row = document.createElement('tr');
+    
+    // Input Columns
+    let rowHtml = `<td>${a}</td><td>${b}</td>`;
+    if (isFull) rowHtml += `<td>${bin}</td>`;
+    row.innerHTML = rowHtml;
+
+    // DIFFERENCE Cell
+    const cellSum = document.createElement('td');
+    const keyS = `${r}-0`;
+    state.arcade.table.targetAnswers[keyS] = correctSum;
+
+    if (blankCells.includes(keyS)) {
+      cellSum.className = 'input-cell cell-unset';
+      cellSum.innerText = '?';
+      cellSum.addEventListener('click', () => toggleTableCell(cellSum, keyS));
+      state.arcade.table.userCells[keyS] = null;
+    } else {
+      cellSum.innerText = correctSum;
+      cellSum.style.opacity = 0.7;
+    }
+    row.appendChild(cellSum);
+
+    // BORROW Cell
+    const cellCarry = document.createElement('td');
+    const keyC = `${r}-1`;
+    state.arcade.table.targetAnswers[keyC] = correctCarry;
+
+    if (blankCells.includes(keyC)) {
+      cellCarry.className = 'input-cell cell-unset';
+      cellCarry.innerText = '?';
+      cellCarry.addEventListener('click', () => toggleTableCell(cellCarry, keyC));
+      state.arcade.table.userCells[keyC] = null;
+    } else {
+      cellCarry.innerText = correctCarry;
+      cellCarry.style.opacity = 0.7;
+    }
+    row.appendChild(cellCarry);
+
+    tbody.appendChild(row);
+  }
+
+  tableEl.appendChild(tbody);
+
+  document.getElementById('table-feedback-msg').innerText = '';
+  document.getElementById('table-feedback-msg').className = 'feedback-text';
+  document.getElementById('btn-table-verify').classList.remove('hidden');
+}
+
+function toggleTableCell(cellEl, key) {
+  playSound('click');
+  let currentVal = state.arcade.table.userCells[key];
+  
+  if (currentVal === null) currentVal = 0;
+  else if (currentVal === 0) currentVal = 1;
+  else currentVal = null; // Reset to unset
+
+  state.arcade.table.userCells[key] = currentVal;
+  
+  if (currentVal === null) {
+    cellEl.innerText = '?';
+    cellEl.className = 'input-cell cell-unset';
+  } else {
+    cellEl.innerText = currentVal;
+    cellEl.className = 'input-cell';
+  }
+}
+
+function verifyTableAnswer() {
+  const t = state.arcade.table;
+  let correct = true;
+  let missing = false;
+
+  for (let key in t.userCells) {
+    if (t.userCells[key] === null) {
+      missing = true;
+    } else if (t.userCells[key] !== t.targetAnswers[key]) {
+      correct = false;
+    }
+  }
+
+  const fMsg = document.getElementById('table-feedback-msg');
+  if (missing) {
+    playSound('incorrect');
+    fMsg.innerText = "Please fill in all empty cells marked with '?' before submitting.";
+    fMsg.className = 'feedback-text incorrect';
+    return;
+  }
+
+  const panel = document.getElementById('game-panel-table');
+
+  if (correct) {
+    playSound('correct');
+    state.arcade.streak += 2;
+    fMsg.innerText = `EXCELLENT! Full table completed. +25 Points (Streak: ${state.arcade.streak})`;
+    fMsg.className = 'feedback-text correct';
+    addScore(25);
+    panel.classList.add('flash-correct');
+    setTimeout(() => panel.classList.remove('flash-correct'), 400);
+    document.getElementById('btn-table-verify').classList.add('hidden');
+  } else {
+    playSound('incorrect');
+    state.arcade.streak = 0;
+    recordStudentMistake('Arcade: Incorrect Truth Table Fill-in');
+    fMsg.innerText = "Some inputs do not match standard subtractor outputs. Try recalculating XOR/AND paths.";
+    fMsg.className = 'feedback-text incorrect';
+    panel.classList.add('flash-incorrect');
+    setTimeout(() => panel.classList.remove('flash-incorrect'), 400);
+  }
+
+  document.getElementById('arcade-streak').innerText = state.arcade.streak;
+  if (state.arcade.score >= 100) {
+    completeModule('module-arcade');
+  }
+}
+
+// GAME 3: TIMED CHALLENGE SPRINTS
+function resetTimedGame() {
+  state.arcade.timer.active = false;
+  state.arcade.timer.timeLeft = 30;
+  document.getElementById('time-left-sec').innerText = '30';
+  document.getElementById('time-feedback').innerText = '';
+  document.getElementById('btn-time-start').classList.remove('hidden');
+
+  // Disable timed choices until start button clicked
+  toggleChoiceButtons(true);
+}
+
+function toggleChoiceButtons(disabled) {
+  const choices = document.querySelectorAll('.choice-btn');
+  choices.forEach(btn => {
+    btn.disabled = disabled;
+    btn.removeEventListener('click', handleTimedChoice);
+    if (!disabled) {
+      btn.addEventListener('click', handleTimedChoice);
+    }
+  });
+}
+
+function startTimedRun() {
+  logClick();
+  playSound('correct');
+  state.arcade.timer.active = true;
+  state.arcade.timer.timeLeft = 30;
+  document.getElementById('btn-time-start').classList.add('hidden');
+  toggleChoiceButtons(false);
+
+  // Start timer loop
+  state.arcade.timer.intervalId = setInterval(() => {
+    state.arcade.timer.timeLeft--;
+    document.getElementById('time-left-sec').innerText = state.arcade.timer.timeLeft;
+
+    if (state.arcade.timer.timeLeft <= 0) {
+      clearInterval(state.arcade.timer.intervalId);
+      endTimedRun();
+    }
+  }, 1000);
+
+  nextTimedQuestion();
+}
+
+function nextTimedQuestion() {
+  const t = state.arcade.timer;
+  t.currentA = Math.random() > 0.5 ? 1 : 0;
+  t.currentB = Math.random() > 0.5 ? 1 : 0;
+  t.currentCin = Math.random() > 0.5 ? 1 : 0;
+
+  t.answerS = t.currentA ^ t.currentB ^ t.currentCin;
+  t.answerC = (t.currentA & t.currentB) | (t.currentCin & (t.currentA ^ t.currentB));
+
+  // Update formula labels
+  document.getElementById('timed-expr-a').innerText = t.currentA;
+  document.getElementById('timed-expr-b').innerText = t.currentB;
+  document.getElementById('timed-expr-bin').innerText = t.currentCin;
+}
+
+function handleTimedChoice(e) {
+  logClick();
+  const choiceBtn = e.currentTarget;
+  const userS = parseInt(choiceBtn.getAttribute('data-s'));
+  const userC = parseInt(choiceBtn.getAttribute('data-c'));
+
+  const t = state.arcade.timer;
+  const correct = (userS === t.answerS && userC === t.answerC);
+
+  const panel = document.getElementById('game-panel-time');
+  const fText = document.getElementById('time-feedback');
+
+  if (correct) {
+    playSound('click');
+    state.arcade.streak++;
+    fText.innerText = `Streak: ${state.arcade.streak}!`;
+    fText.className = 'feedback-text correct';
+    addScore(5);
+    panel.classList.add('flash-correct');
+    setTimeout(() => panel.classList.remove('flash-correct'), 300);
+  } else {
+    playSound('incorrect');
+    state.arcade.streak = 0;
+    recordStudentMistake('Arcade: Incorrect Timed Choice');
+    fText.innerText = "INCORRECT choice! Streak reset.";
+    fText.className = 'feedback-text incorrect';
+    panel.classList.add('flash-incorrect');
+    setTimeout(() => panel.classList.remove('flash-incorrect'), 300);
+  }
+
+  document.getElementById('arcade-streak').innerText = state.arcade.streak;
+  nextTimedQuestion();
+}
+
+function endTimedRun() {
+  playSound('success');
+  toggleChoiceButtons(true);
+  document.getElementById('time-feedback').innerText = `Timed Run Complete! Final score incremented.`;
+  document.getElementById('time-feedback').className = 'feedback-text correct';
+  document.getElementById('btn-time-start').classList.remove('hidden');
+  document.getElementById('btn-time-start').innerText = 'Restart Sprint';
+
+  if (state.arcade.score >= 100) {
+    completeModule('module-arcade');
+  }
+}
+
+// SETUP RESTARTS & GLOBAL MODALS
+function initControls() {
+  const btnReset = document.getElementById('btn-global-reset');
+  const soundToggle = document.getElementById('btn-sound-toggle');
+  const themeToggle = document.getElementById('btn-theme-toggle');
+  const landingThemeToggle = document.getElementById('btn-landing-theme-toggle');
+  
+  // Welcome Modal actions
+  const soundModal = document.getElementById('sound-modal');
+  document.getElementById('btn-sound-enable').addEventListener('click', () => {
+    initAudio();
+    soundModal.style.opacity = 0;
+    setTimeout(() => soundModal.style.display = 'none', 300);
+  });
+
+  document.getElementById('btn-sound-disable').addEventListener('click', () => {
+    state.soundEnabled = false;
+    updateSoundUI();
+    soundModal.style.opacity = 0;
+    setTimeout(() => soundModal.style.display = 'none', 300);
+  });
+
+  soundToggle.addEventListener('click', toggleSound);
+
+  const performThemeToggle = () => {
+    logClick();
+    playSound('click');
+    const currentTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('logicSubtractorLab.theme', currentTheme);
+    if (typeof drawSandbox === 'function') {
+      drawSandbox();
+    }
+  };
+
+  if (themeToggle) {
+    themeToggle.addEventListener('click', performThemeToggle);
+  }
+  if (landingThemeToggle) {
+    landingThemeToggle.addEventListener('click', performThemeToggle);
+  }
+
+  btnReset.addEventListener('click', () => {
+    const proceed = confirm("Are you sure you want to reset all module completion progress?");
+    if (proceed) {
+      const savedTheme = localStorage.getItem('logicSubtractorLab.theme');
+      localStorage.clear();
+      if (savedTheme) {
+        localStorage.setItem('logicSubtractorLab.theme', savedTheme);
+      }
+      state.completedModules.clear();
+      state.arcade.score = 0;
+      state.arcade.streak = 0;
+      document.getElementById('arcade-score').innerText = '0';
+      
+      resetSandboxElements();
+      updateProgressUI();
+      switchModule('module-intro');
+      
+      if (state.soundEnabled) playSound('incorrect');
+    }
+  });
+
+  // Module 8 Dashboard reset
+  document.getElementById('btn-restart-lab').addEventListener('click', () => {
+    const savedTheme = localStorage.getItem('logicSubtractorLab.theme');
+    localStorage.clear();
+    if (savedTheme) {
+      localStorage.setItem('logicSubtractorLab.theme', savedTheme);
+    }
+    state.completedModules.clear();
+    state.arcade.score = 0;
+    state.arcade.streak = 0;
+    document.getElementById('arcade-score').innerText = '0';
+    
+    resetSandboxElements();
+    updateProgressUI();
+    switchModule('module-intro');
+  });
+
+}
+
+// ============================================================
+// GOOGLE SHEETS API LAYER
+// ============================================================
+
+function getSheetURL() {
+  return localStorage.getItem('logic_subtractor_sheet_url') || DEFAULT_DATABASE_URL || '';
+}
+
+function setSheetURL(url) {
+  localStorage.setItem('logic_subtractor_sheet_url', url);
+}
+
+// Generic POST/GET to the Google Apps Script Web App
+async function sheetFetch(action, data = {}) {
+  const url = getSheetURL();
+  if (!url) throw new Error('No Google Sheet URL configured.');
+
+  const payload = { action, ...data };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(payload)
+  });
+  
+  if (!res.ok) throw new Error('Network error: ' + res.status);
+  return await res.json();
+}
+
+// Authenticate a student against the Google Sheet
+async function authenticateStudent(rollNo, className, password) {
+  return await sheetFetch('login', { rollNo, className, password });
+}
+
+// Save student progress back to Google Sheet
+async function syncStudentToSheet() {
+  if (!state.currentUser || state.currentUser === 'Guest') return;
+  try {
+    await sheetFetch('saveProgress', {
+      rollNo: state.currentRoll,
+      completedModules: Array.from(state.completedModules).join(','),
+      completionPct: Math.round((state.completedModules.size / 8) * 100),
+      clicks: state.clicksCount,
+      correct: state.correctCount,
+      accuracy: state.clicksCount > 0 ? Math.round((state.correctCount / Math.max(1, state.correctCount + (state.clicksCount - state.correctCount))) * 100) : 100,
+      lastActive: getFormattedDate(),
+      mistakes: (JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]').find(s => s.rollNo === state.currentRoll) || {}).mistakes || [],
+      arcadeScore: state.arcade.highScore
+    });
+  } catch (e) {
+    console.warn('Sheet sync failed (offline mode):', e.message);
+  }
+}
+
+// Fetch all students from Google Sheet for admin roster
+async function fetchAllStudentsFromSheet() {
+  return await sheetFetch('getAllStudents');
+}
+
+// Test connection to Google Sheet
+async function testSheetConnection() {
+  return await sheetFetch('ping');
+}
+
+// ============================================================
+// LANDING PAGE & ADMIN DASHBOARD LOGIC
+// ============================================================
+let demoA = 0;
+let demoB = 0;
+
+function initLandingPageModule() {
+  // Student login form handler
+  const studentForm = document.getElementById('student-login-form');
+  studentForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const rollNo = document.getElementById('student-roll').value.trim();
+    const className = document.getElementById('student-class').value.trim();
+    const password = document.getElementById('student-password').value;
+    
+    const errorEl = document.getElementById('login-error-msg');
+    const spinnerEl = document.getElementById('login-spinner');
+    const submitBtn = document.getElementById('btn-student-login');
+    
+    errorEl.classList.add('hidden');
+    
+    const sheetURL = getSheetURL();
+    
+    if (sheetURL) {
+      // Online mode: authenticate against Google Sheet
+      spinnerEl.classList.remove('hidden');
+      submitBtn.disabled = true;
+      
+      try {
+        const result = await authenticateStudent(rollNo, className, password);
+        spinnerEl.classList.add('hidden');
+        submitBtn.disabled = false;
+        
+        if (result.success) {
+          loginStudent(result.student.name, className, rollNo, result.student);
+        } else {
+          errorEl.innerText = result.message || 'Invalid credentials. Please check your roll number, class, and password.';
+          errorEl.classList.remove('hidden');
+        }
+      } catch (err) {
+        spinnerEl.classList.add('hidden');
+        submitBtn.disabled = false;
+        // Fallback to offline mode
+        loginStudentOffline(rollNo, className, password);
+      }
+    } else {
+      // Offline mode: use localStorage
+      loginStudentOffline(rollNo, className, password);
+    }
+  });
+
+  document.getElementById('btn-login-guest').addEventListener('click', () => {
+    loginStudent('Guest', 'GUEST', 'GUEST', null);
+  });
+
+  // Admin panel navigation
+  document.getElementById('btn-footer-admin-login').addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    document.getElementById('student-login-box').classList.add('hidden');
+    document.getElementById('admin-login-box').classList.remove('hidden');
+  });
+
+  document.getElementById('btn-admin-cancel').addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    document.getElementById('admin-login-box').classList.add('hidden');
+    document.getElementById('student-login-box').classList.remove('hidden');
+  });
+
+  const adminForm = document.getElementById('admin-login-form');
+  adminForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const user = document.getElementById('admin-username').value.trim();
+    const pass = document.getElementById('admin-password').value.trim();
+    if (user === 'admin' && pass === 'admin123') {
+      loginAdmin();
+    } else {
+      alert("Invalid administrator credentials!");
+    }
+  });
+
+  document.getElementById('btn-hero-admin').addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    document.getElementById('student-login-box').classList.add('hidden');
+    document.getElementById('admin-login-box').classList.remove('hidden');
+    document.getElementById('admin-login-box').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  document.getElementById('btn-admin-logout').addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    document.getElementById('app-admin').classList.add('hidden');
+    document.getElementById('app-landing').classList.remove('hidden');
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', async () => {
+    logClick();
+    playSound('click');
+    
+    // Sync final stats to Google Sheet before clearing session memory
+    await syncStudentToSheet();
+    
+    // Clear user state
+    state.currentUser = null;
+    state.currentRoll = null;
+    state.currentClass = null;
+    state.completedModules = new Set();
+    state.clicksCount = 0;
+    state.correctCount = 0;
+    
+    // Reset login forms
+    const rollInput = document.getElementById('student-roll');
+    const classInput = document.getElementById('student-class');
+    const passInput = document.getElementById('student-password');
+    if (rollInput) rollInput.value = '';
+    if (classInput) classInput.value = '';
+    if (passInput) passInput.value = '';
+    
+    const errorEl = document.getElementById('login-error-msg');
+    if (errorEl) errorEl.innerText = '';
+    
+    // Transition screens
+    document.getElementById('app-trainer-container').classList.add('hidden');
+    document.getElementById('app-landing').classList.remove('hidden');
+    
+    // Reset window scroll to top of landing page
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  });
+
+  // Admin Database Settings handlers
+  document.getElementById('btn-sync-from-sheet').addEventListener('click', async () => {
+    logClick();
+    playSound('click');
+    const statusEl = document.getElementById('sheet-status-msg');
+
+    if (!getSheetURL()) {
+      statusEl.className = 'sheet-status-msg error';
+      statusEl.innerText = '✗ No Google Sheet URL configured.';
+      statusEl.classList.remove('hidden');
+      return;
+    }
+
+    statusEl.className = 'sheet-status-msg info';
+    statusEl.innerText = '⏳ Syncing students from Google Sheet...';
+    statusEl.classList.remove('hidden');
+
+    try {
+      const result = await fetchAllStudentsFromSheet();
+      if (result.success && result.students) {
+        // Merge sheet data into localStorage registry
+        localStorage.setItem('logic_subtractor_students', JSON.stringify(result.students));
+        renderAdminStats();
+        renderAdminRoster();
+        statusEl.className = 'sheet-status-msg success';
+        statusEl.innerText = `✓ Synced ${result.students.length} student(s) from sheet.`;
+        playSound('correct');
+      } else {
+        throw new Error(result.message || 'No data returned');
+      }
+    } catch (err) {
+      statusEl.className = 'sheet-status-msg error';
+      statusEl.innerText = '✗ Sync failed: ' + err.message;
+      playSound('incorrect');
+    }
+  });
+
+  document.getElementById('btn-demo-toggle-a').addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    demoA = demoA === 0 ? 1 : 0;
+    document.getElementById('btn-demo-toggle-a').innerText = `Toggle Switch A (${demoA})`;
+    document.getElementById('btn-demo-toggle-a').classList.toggle('primary', demoA === 1);
+    document.getElementById('btn-demo-toggle-a').classList.toggle('secondary', demoA === 0);
+    evaluateDemoHA();
+  });
+
+  document.getElementById('btn-demo-toggle-b').addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    demoB = demoB === 0 ? 1 : 0;
+    document.getElementById('btn-demo-toggle-b').innerText = `Toggle Switch B (${demoB})`;
+    document.getElementById('btn-demo-toggle-b').classList.toggle('primary', demoB === 1);
+    document.getElementById('btn-demo-toggle-b').classList.toggle('secondary', demoB === 0);
+    evaluateDemoHA();
+  });
+
+  let searchTimeout = null;
+  document.getElementById('admin-search-input').addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      renderAdminRoster();
+    }, 200);
+  });
+
+  document.getElementById('admin-sort-select').addEventListener('change', () => {
+    logClick();
+    renderAdminRoster();
+  });
+
+  document.getElementById('admin-filter-select').addEventListener('change', () => {
+    logClick();
+    renderAdminRoster();
+  });
+
+  document.getElementById('btn-admin-detail-close').addEventListener('click', () => {
+    logClick();
+    playSound('click');
+    document.getElementById('admin-detail-modal').classList.add('hidden');
+  });
+
+  startHeroLoop();
+  initStudentDirectory();
+  evaluateDemoHA();
+
+  // Hide trainer initially on page load
+  document.getElementById('app-trainer-container').classList.add('hidden');
+}
+
+function evaluateDemoHA() {
+  const difference = demoA ^ demoB;
+  const borrow = demoA & demoB;
+
+  document.getElementById('demo-w-a-xor').classList.toggle('active', demoA === 1);
+  document.getElementById('demo-w-a-and').classList.toggle('active', demoA === 1);
+  document.getElementById('demo-w-b-xor').classList.toggle('active', demoB === 1);
+  document.getElementById('demo-w-b-and').classList.toggle('active', demoB === 1);
+
+  document.getElementById('demo-w-xor-difference').classList.toggle('active', difference === 1);
+  document.getElementById('demo-w-and-borrow').classList.toggle('active', borrow === 1);
+
+  document.getElementById('demo-led-difference').setAttribute('fill', difference ? 'var(--accent-cyan)' : '#1f2937');
+  document.getElementById('demo-led-borrow').setAttribute('fill', borrow ? 'var(--accent-amber)' : '#1f2937');
+  
+  document.getElementById('demo-led-difference').style.filter = difference ? 'drop-shadow(0 0 8px rgba(0, 240, 255, 0.5))' : 'none';
+  document.getElementById('demo-led-borrow').style.filter = borrow ? 'drop-shadow(0 0 8px rgba(255, 160, 0, 0.5))' : 'none';
+}
+
+function startHeroLoop() {
+  let heroStateIdx = 0;
+  setInterval(() => {
+    const states = [
+      {a: 0, b: 0},
+      {a: 0, b: 1},
+      {a: 1, b: 1},
+      {a: 1, b: 0}
+    ];
+    const s = states[heroStateIdx];
+    heroStateIdx = (heroStateIdx + 1) % states.length;
+    
+    const difference = s.a ^ s.b;
+    const borrow = s.a & s.b;
+    
+    const lblA = document.getElementById('hero-lbl-a');
+    const lblB = document.getElementById('hero-lbl-b');
+    if (lblA) lblA.textContent = `A=${s.a}`;
+    if (lblB) lblB.textContent = `B=${s.b}`;
+    
+    document.getElementById('hero-wire-a-xor').classList.toggle('active', s.a === 1);
+    document.getElementById('hero-wire-a-and').classList.toggle('active', s.a === 1);
+    document.getElementById('hero-wire-b-xor').classList.toggle('active', s.b === 1);
+    document.getElementById('hero-wire-b-and').classList.toggle('active', s.b === 1);
+    
+    document.getElementById('hero-wire-difference').classList.toggle('active', difference === 1);
+    document.getElementById('hero-wire-borrow').classList.toggle('active', borrow === 1);
+    
+    const ledSum = document.getElementById('hero-led-difference');
+    const ledCarry = document.getElementById('hero-led-borrow');
+    if (ledSum) {
+      ledSum.setAttribute('fill', difference ? 'var(--accent-cyan)' : 'var(--bg-input)');
+      ledSum.style.filter = difference ? 'drop-shadow(0 0 5px rgba(0, 240, 255, 0.4))' : 'none';
+    }
+    if (ledCarry) {
+      ledCarry.setAttribute('fill', borrow ? 'var(--accent-amber)' : 'var(--bg-input)');
+      ledCarry.style.filter = borrow ? 'drop-shadow(0 0 5px rgba(255, 160, 0, 0.4))' : 'none';
+    }
+  }, 2000);
+}
+
+function initStudentDirectory() {
+  if (!localStorage.getItem('logic_subtractor_students')) {
+    const mockStudents = [
+      {
+        name: "Alice Smith",
+        classCode: "CS101-FALL",
+        completedModules: ["module-intro", "module-half-subtractor", "module-full-subtractor", "module-kmap", "module-sandbox", "module-ripple-borrow"],
+        completionPct: 75,
+        clicksCount: 342,
+        correctCount: 22,
+        accuracy: 88,
+        lastActive: "2026-07-17 14:32",
+        mistakes: ["Arcade Predict DIFFERENCE", "Table Full Subtractor Borrow", "XOR Gate Sandbox Circuit"]
+      },
+      {
+        name: "Bob Jones",
+        classCode: "CS101-FALL",
+        completedModules: ["module-intro", "module-half-subtractor", "module-full-subtractor", "module-kmap"],
+        completionPct: 50,
+        clicksCount: 198,
+        correctCount: 9,
+        accuracy: 64,
+        lastActive: "2026-07-17 18:10",
+        mistakes: ["Borrow intro toggle", "Breadboard switch knob Cy", "Arcade Table DIFFERENCE", "K-Map adjacent cells"]
+      },
+      {
+        name: "Charlie Brown",
+        classCode: "CS101-FALL",
+        completedModules: ["module-intro", "module-half-subtractor", "module-full-subtractor", "module-kmap", "module-sandbox", "module-ripple-borrow", "module-breadboard", "module-arcade"],
+        completionPct: 100,
+        clicksCount: 512,
+        correctCount: 40,
+        accuracy: 95,
+        lastActive: "2026-07-17 21:05",
+        mistakes: []
+      },
+      {
+        name: "Diana Prince",
+        classCode: "GUEST",
+        completedModules: ["module-intro"],
+        completionPct: 12,
+        clicksCount: 24,
+        correctCount: 2,
+        accuracy: 80,
+        lastActive: "2026-07-18 01:20",
+        mistakes: ["Intro binary math"]
+      }
+    ];
+    localStorage.setItem('logic_subtractor_students', JSON.stringify(mockStudents));
+  }
+}
+
+function loginStudent(name, classCode, rollNo, sheetData) {
+  state.currentUser = name;
+  state.currentRoll = rollNo;
+  state.currentClass = classCode;
+  
+  if (name !== 'Guest') {
+    let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+    let profile = registry.find(s => s.rollNo === rollNo);
+    
+    if (sheetData) {
+      // Merge sheet data into local profile
+      const completedArr = (sheetData.completedModules || '').split(',').filter(m => m);
+      if (!profile) {
+        profile = {
+          rollNo: rollNo,
+          name: sheetData.name || name,
+          classCode: classCode,
+          password: sheetData.password || '',
+          completedModules: completedArr,
+          completionPct: sheetData.completionPct || 0,
+          clicksCount: sheetData.clicks || 0,
+          correctCount: sheetData.correct || 0,
+          accuracy: sheetData.accuracy || 100,
+          lastActive: getFormattedDate(),
+          mistakes: sheetData.mistakes || [],
+          arcadeScore: sheetData.arcadeScore || 0
+        };
+        registry.push(profile);
+      } else {
+        profile.completedModules = completedArr;
+        profile.completionPct = sheetData.completionPct || profile.completionPct;
+        profile.clicksCount = sheetData.clicks || profile.clicksCount;
+        profile.correctCount = sheetData.correct || profile.correctCount;
+        profile.accuracy = sheetData.accuracy || profile.accuracy;
+        profile.lastActive = getFormattedDate();
+      }
+      localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+    } else if (!profile) {
+      profile = {
+        rollNo: rollNo,
+        name: name,
+        classCode: classCode,
+        password: '',
+        completedModules: [],
+        completionPct: 0,
+        clicksCount: 0,
+        correctCount: 0,
+        accuracy: 100,
+        lastActive: getFormattedDate(),
+        mistakes: [],
+        arcadeScore: 0
+      };
+      registry.push(profile);
+      localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+    }
+    
+    state.completedModules = new Set(profile.completedModules);
+    state.clicksCount = profile.clicksCount;
+    state.correctCount = profile.correctCount;
+  } else {
+    state.completedModules = new Set();
+    state.clicksCount = 0;
+    state.correctCount = 0;
+  }
+
+  updateProgressUI();
+
+  document.getElementById('app-landing').classList.add('hidden');
+  document.getElementById('app-trainer-container').classList.remove('hidden');
+
+  const modulesList = ["module-intro", "module-half-subtractor", "module-full-subtractor", "module-kmap", "module-sandbox", "module-ripple-borrow", "module-breadboard", "module-arcade"];
+  let target = "module-intro";
+  for (let m of modulesList) {
+    if (!state.completedModules.has(m)) {
+      target = m;
+      break;
+    }
+  }
+  switchModule(target);
+}
+
+// Offline fallback login: validates against localStorage registry
+function loginStudentOffline(rollNo, className, password) {
+  const registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  const profile = registry.find(s => 
+    s.rollNo === rollNo && 
+    s.classCode === className && 
+    s.password === password
+  );
+
+  const errorEl = document.getElementById('login-error-msg');
+
+  if (profile) {
+    loginStudent(profile.name, className, rollNo, null);
+  } else if (registry.length === 0) {
+    // No students registered yet — allow first login and create profile
+    loginStudent(rollNo, className, rollNo, null);
+    // Save the password for future offline logins
+    const reg = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+    const idx = reg.findIndex(s => s.rollNo === rollNo);
+    if (idx !== -1) {
+      reg[idx].password = password;
+      localStorage.setItem('logic_subtractor_students', JSON.stringify(reg));
+    }
+  } else {
+    errorEl.innerText = 'Invalid credentials. If this is your first time, ask your teacher to add you to the Google Sheet or connect the database.';
+    errorEl.classList.remove('hidden');
+  }
+}
+
+function loginAdmin() {
+  logClick();
+  playSound('correct');
+  
+  document.getElementById('admin-username').value = "";
+  document.getElementById('admin-password').value = "";
+
+  document.getElementById('app-landing').classList.add('hidden');
+  document.getElementById('app-admin').classList.remove('hidden');
+
+  renderAdminStats();
+  renderAdminRoster();
+  
+  // Run automatic connection check on login
+  checkAdminDbConnection();
+}
+
+async function checkAdminDbConnection() {
+  const badge = document.getElementById('db-connection-badge');
+  const statusEl = document.getElementById('sheet-status-msg');
+  if (!badge) return;
+
+  badge.innerText = 'TESTING...';
+  badge.className = 'badge';
+
+  try {
+    const result = await testSheetConnection();
+    if (result.success) {
+      badge.innerText = 'CONNECTED';
+      badge.className = 'badge connected';
+      if (statusEl) {
+        statusEl.className = 'sheet-status-msg success';
+        statusEl.innerText = '✓ Connected to database: ' + (result.sheetName || 'LogicAdderLab_DB');
+        statusEl.classList.remove('hidden');
+      }
+    } else {
+      throw new Error(result.message || 'Connection test failed');
+    }
+  } catch (err) {
+    badge.innerText = 'DISCONNECTED';
+    badge.className = 'badge disconnected';
+    if (statusEl) {
+      statusEl.className = 'sheet-status-msg error';
+      statusEl.innerText = '✗ Database error: ' + err.message;
+      statusEl.classList.remove('hidden');
+    }
+  }
+}
+
+function getFormattedDate() {
+  const d = new Date();
+  return d.toISOString().replace('T', ' ').substring(0, 16);
+}
+
+function recordStudentMistake(topic) {
+  if (!state.currentUser || state.currentUser === 'Guest') return;
+  
+  let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  let idx = registry.findIndex(s => s.rollNo === state.currentRoll);
+  if (idx !== -1) {
+    if (!registry[idx].mistakes.includes(topic)) {
+      registry[idx].mistakes.push(topic);
+    }
+    syncStudentSessionStats();
+  }
+}
+
+function updateStudentCompletionInRegistry() {
+  if (!state.currentUser || state.currentUser === 'Guest') return;
+  let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  let idx = registry.findIndex(s => s.rollNo === state.currentRoll);
+  if (idx !== -1) {
+    registry[idx].completedModules = Array.from(state.completedModules);
+    registry[idx].completionPct = Math.round((state.completedModules.size / 8) * 100);
+    registry[idx].lastActive = getFormattedDate();
+    localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+  }
+}
+
+function syncStudentSessionStats() {
+  if (!state.currentUser || state.currentUser === 'Guest') return;
+  let registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  let idx = registry.findIndex(s => s.rollNo === state.currentRoll);
+  if (idx !== -1) {
+    registry[idx].clicksCount = state.clicksCount;
+    registry[idx].correctCount = state.correctCount;
+    const totalAttempts = state.correctCount + registry[idx].mistakes.length;
+    registry[idx].accuracy = totalAttempts > 0 ? Math.round((state.correctCount / totalAttempts) * 100) : 100;
+    registry[idx].lastActive = getFormattedDate();
+    localStorage.setItem('logic_subtractor_students', JSON.stringify(registry));
+  }
+}
+
+function renderAdminStats() {
+  const registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  
+  document.getElementById('admin-stat-total-students').innerText = registry.length;
+
+  if (registry.length === 0) {
+    document.getElementById('admin-stat-avg-completion').innerText = "0%";
+    document.getElementById('admin-stat-avg-accuracy').innerText = "0%";
+    document.getElementById('admin-stat-missed-concept').innerText = "None";
+    return;
+  }
+
+  let totalComp = 0;
+  let totalAcc = 0;
+  const conceptCounts = {};
+
+  registry.forEach(s => {
+    totalComp += s.completionPct;
+    totalAcc += s.accuracy;
+    s.mistakes.forEach(m => {
+      let key = m.split(':')[0] || m;
+      conceptCounts[key] = (conceptCounts[key] || 0) + 1;
+    });
+  });
+
+  const avgComp = Math.round(totalComp / registry.length);
+  const avgAcc = Math.round(totalAcc / registry.length);
+
+  document.getElementById('admin-stat-avg-completion').innerText = `${avgComp}%`;
+  document.getElementById('admin-bar-avg-completion').style.width = `${avgComp}%`;
+  document.getElementById('admin-stat-avg-accuracy').innerText = `${avgAcc}%`;
+  document.getElementById('admin-bar-avg-accuracy').style.width = `${avgAcc}%`;
+
+  let worstConcept = "None";
+  let maxCount = 0;
+  for (let concept in conceptCounts) {
+    if (conceptCounts[concept] > maxCount) {
+      maxCount = conceptCounts[concept];
+      worstConcept = concept;
+    }
+  }
+  document.getElementById('admin-stat-missed-concept').innerText = worstConcept;
+}
+
+function renderAdminRoster() {
+  const registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  const searchQuery = document.getElementById('admin-search-input').value.toLowerCase();
+  const sortBy = document.getElementById('admin-sort-select').value;
+  const filterClass = document.getElementById('admin-filter-select').value;
+
+  let filtered = registry.filter(s => {
+    const matchesSearch = (s.name || '').toLowerCase().includes(searchQuery) || (s.rollNo || '').toLowerCase().includes(searchQuery);
+    const matchesFilter = filterClass === 'all' || s.classCode === filterClass;
+    return matchesSearch && matchesFilter;
+  });
+
+  filtered.sort((x, y) => {
+    if (sortBy === 'name') {
+      return x.name.localeCompare(y.name);
+    } else if (sortBy === 'completion') {
+      return y.completionPct - x.completionPct;
+    } else if (sortBy === 'accuracy') {
+      return y.accuracy - x.accuracy;
+    } else if (sortBy === 'active') {
+      return y.lastActive.localeCompare(x.lastActive);
+    }
+    return 0;
+  });
+
+  const tbody = document.getElementById('admin-roster-tbody');
+  tbody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; font-style:italic;" class="text-muted">No students matching filters.</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(s => {
+    const tr = document.createElement('tr');
+    const completedLen = Array.isArray(s.completedModules) ? s.completedModules.length : 0;
+    
+    const escapedRoll = escapeHtml(s.rollNo || '-');
+    const escapedName = escapeHtml(s.name || s.rollNo || '');
+    const escapedClass = escapeHtml(s.classCode || '');
+    const escapedActive = escapeHtml(s.lastActive || '-');
+
+    tr.innerHTML = `
+      <td class="font-mono text-bright">${escapedRoll}</td>
+      <td class="bold text-bright">${escapedName}</td>
+      <td><span class="badge secondary">${escapedClass}</span></td>
+      <td>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span>${completedLen} / 8</span>
+          <div class="mini-bar-track" style="width:60px;"><div class="mini-bar-fill fill-green" style="width:${s.completionPct || 0}%;"></div></div>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="bold ${(s.accuracy || 0) >= 80 ? 'text-bright' : 'text-muted'}">${s.accuracy || 0}%</span>
+          <div class="mini-bar-track" style="width:60px;"><div class="mini-bar-fill fill-cyan" style="width:${s.accuracy || 0}%;"></div></div>
+        </div>
+      </td>
+      <td class="font-mono text-muted">${escapedActive}</td>
+      <td>
+        <button class="btn primary compact btn-view-dossier" data-roll="${escapedRoll}">View Dossier</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('.btn-view-dossier').forEach(btn => {
+    btn.addEventListener('click', () => {
+      logClick();
+      playSound('click');
+      const rollNo = btn.getAttribute('data-roll');
+      openStudentDossier(rollNo);
+    });
+  });
+}
+
+function openStudentDossier(rollNo) {
+  const registry = JSON.parse(localStorage.getItem('logic_subtractor_students') || '[]');
+  const student = registry.find(s => s.rollNo === rollNo);
+  if (!student) return;
+
+  document.getElementById('admin-detail-name').innerText = student.name;
+  document.getElementById('admin-detail-class').innerText = student.classCode;
+  document.getElementById('admin-detail-active').innerText = student.lastActive;
+  document.getElementById('admin-detail-clicks').innerText = student.clicksCount;
+  document.getElementById('admin-detail-correct').innerText = student.correctCount;
+
+  const allModules = [
+    { id: "module-intro", label: "01. Binary Borrow" },
+    { id: "module-half-subtractor", label: "02. Half Subtractor Lab" },
+    { id: "module-full-subtractor", label: "03. Full Subtractor Lab" },
+    { id: "module-kmap", label: "04. K-Map Lab" },
+    { id: "module-sandbox", label: "05. Gate Sandbox" },
+    { id: "module-ripple-borrow", label: "06. Ripple Playground" },
+    { id: "module-breadboard", label: "07. Breadboard/IC" },
+    { id: "module-arcade", label: "08. Logic Arcade" }
+  ];
+
+  const modulesContainer = document.getElementById('admin-detail-modules');
+  modulesContainer.innerHTML = "";
+  allModules.forEach(m => {
+    const isDone = student.completedModules.includes(m.id);
+    const row = document.createElement('div');
+    row.className = "detail-module-row";
+    row.innerHTML = `
+      <span>${m.label}</span>
+      <span class="detail-module-status ${isDone ? 'done' : 'pending'}">${isDone ? 'COMPLETED' : 'IN PROGRESS'}</span>
+    `;
+    modulesContainer.appendChild(row);
+  });
+
+  const badgesContainer = document.getElementById('admin-detail-badges');
+  badgesContainer.innerHTML = "";
+  const badges = [];
+  if (student.completedModules.includes('module-half-subtractor')) badges.push({ emoji: "⚡", label: "Half Subtractor Master" });
+  if (student.completedModules.includes('module-full-subtractor')) badges.push({ emoji: "🔋", label: "Full Subtractor Master" });
+  if (student.completedModules.includes('module-kmap')) badges.push({ emoji: "🗺️", label: "K-Map Solver" });
+  if (student.completedModules.includes('module-ripple-borrow')) badges.push({ emoji: "🌊", label: "Ripple Propagator" });
+  if (student.completedModules.includes('module-arcade') && student.accuracy >= 90) badges.push({ emoji: "🎖️", label: "Perfect Arcade" });
+  
+  if (badges.length === 0) {
+    badgesContainer.innerHTML = `<span class="text-muted font-italic" style="font-size:0.85rem;">No badges earned yet.</span>`;
+  } else {
+    badges.forEach(b => {
+      const el = document.createElement('span');
+      el.className = "badge secondary";
+      el.style.margin = "2px";
+      el.innerHTML = `${b.emoji} ${b.label}`;
+      badgesContainer.appendChild(el);
+    });
+  }
+
+  const mistakesContainer = document.getElementById('admin-detail-mistakes');
+  mistakesContainer.innerHTML = "";
+  if (student.mistakes.length === 0) {
+    mistakesContainer.innerHTML = `<li class="mistake-empty">No mistakes recorded. Perfect logic record!</li>`;
+  } else {
+    student.mistakes.forEach(m => {
+      const li = document.createElement('li');
+      li.className = "mistake-item";
+      li.innerText = m;
+      mistakesContainer.appendChild(li);
+    });
+  }
+
+  document.getElementById('admin-detail-modal').classList.remove('hidden');
+}
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') {
+    if (str === null || str === undefined) return '';
+    return String(str);
+  }
+  return str.replace(/[&<>"']/g, function(m) {
+    switch (m) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      case "'": return '&#039;';
+      default: return m;
+    }
+  });
+}
+
+// ONLOAD BOOTSTRAPPER
+window.addEventListener('DOMContentLoaded', () => {
+  // Initialize module components
+  initNavigation();
+  initLandingPageModule();
+  initIntroModule();
+  initHalfSubtractorModule();
+  initFullSubtractorModule();
+  initKMapModule();
+  initSandboxTools();
+  initRippleCarryModule();
+  initBreadboardModule();
+  initArcadeModule();
+  initControls();
+
+  // Auto-config database URL if passed via query parameter (e.g. ?db=url)
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const dbUrl = urlParams.get('db') || urlParams.get('database') || urlParams.get('sheet');
+    if (dbUrl && dbUrl.startsWith('http')) {
+      localStorage.setItem('logic_subtractor_sheet_url', dbUrl);
+      console.log('Database URL configured from URL query parameter:', dbUrl);
+      
+      // Clean up the URL query parameter for a clean address bar
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+      window.history.replaceState({ path: newUrl }, '', newUrl);
+    }
+  } catch (e) {
+    console.error('Failed to parse database query parameter:', e);
+  }
+
+  // Load state from local memory cache if present
+  updateProgressUI();
+
+  // Load manifest dynamically only on HTTP/HTTPS to prevent CORS errors under file:/// protocol
+  if (window.location.protocol !== 'file:') {
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = 'manifest.json';
+    document.head.appendChild(link);
+  }
+
+  // Register Service Worker for offline PWA support (only on supported web protocols)
+  if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('ServiceWorker registered:', reg.scope))
+        .catch(err => console.log('ServiceWorker registration failed:', err));
+    });
+  }
+});
