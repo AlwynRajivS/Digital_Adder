@@ -811,7 +811,7 @@ body {
   filter: drop-shadow(0 0 3px var(--accent-amber));
 }
 
-.circuit-wire.bin-active {
+.circuit-wire.cin-active {
   stroke: var(--accent-cyan);
   filter: drop-shadow(0 0 3px var(--accent-cyan));
 }
@@ -834,12 +834,12 @@ body {
   pointer-events: none;
 }
 
-.wire-pulse.active-borrow {
+.wire-pulse.active-carry {
   stroke: var(--accent-amber);
   filter: drop-shadow(0 0 4px var(--accent-amber));
 }
 
-.wire-pulse.active-difference {
+.wire-pulse.active-sum {
   stroke: var(--accent-green);
   filter: drop-shadow(0 0 4px var(--accent-green));
 }
@@ -1055,14 +1055,14 @@ body {
   box-shadow: 0 0 6px rgba(255, 159, 28, 0.2);
 }
 
-.bit-box.active-borrow.active {
+.bit-box.active-carry.active {
   background: rgba(0, 210, 255, 0.1);
   color: var(--accent-cyan);
   border-color: var(--accent-cyan);
   box-shadow: 0 0 6px rgba(0, 210, 255, 0.2);
 }
 
-.decimal-difference-display {
+.decimal-sum-display {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1082,7 +1082,7 @@ body {
   color: var(--text-muted);
 }
 
-.glowing-difference {
+.glowing-sum {
   color: var(--accent-cyan);
   font-weight: 700;
   text-shadow: 0 0 8px rgba(0, 210, 255, 0.4);
@@ -1191,10 +1191,6 @@ body {
 
 .xor-icon {
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 25"><path d="M 8,2 Q 18,12.5 8,23 Q 21,23 35,12.5 Q 21,2 8,2 Z" fill="none" stroke="%23cbd5e1" stroke-width="2.5"/><path d="M 3,2 Q 13,12.5 3,23" fill="none" stroke="%23cbd5e1" stroke-width="2.5"/></svg>');
-}
-
-.not-icon {
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 25"><path d="M 10,4 L 26,12.5 L 10,21 Z" fill="none" stroke="%23cbd5e1" stroke-width="2.5"/><circle cx="31" cy="12.5" r="3" fill="none" stroke="%23cbd5e1" stroke-width="2.5"/></svg>');
 }
 
 .sandbox-tools {
@@ -1335,7 +1331,7 @@ body {
   gap: 4px;
 }
 
-.mini-grid.fs-cols {
+.mini-grid.fa-cols {
   grid-template-columns: repeat(8, 1fr);
 }
 
@@ -3769,23 +3765,23 @@ body {
     }
     
     /* Prevent schematics from squishing below readable sizes */
-    #half-subtractor-svg {
+    #half-adder-svg {
       min-width: 550px ;
     }
     
-    #fs-gate-svg, #fs-block-svg {
+    #fa-gate-svg, #fa-block-svg {
       min-width: 600px ;
     }
     
-    #breadboard-hs-svg {
+    #breadboard-ha-svg {
       min-width: 650px ;
     }
     
-    #breadboard-fs-svg {
+    #breadboard-fa-svg {
       min-width: 700px ;
     }
     
-    #kmap-hs-svg, #kmap-fs-svg {
+    #kmap-ha-svg, #kmap-fa-svg {
       min-width: 480px ;
     }
     
@@ -3828,7 +3824,7 @@ body {
       gap: 4px ;
     }
   
-    /* 5. Ripple Borrow Playground Adjustments */
+    /* 5. Ripple Carry Playground Adjustments */
     .nibble-selector {
       gap: 6px ;
       justify-content: space-between ;
